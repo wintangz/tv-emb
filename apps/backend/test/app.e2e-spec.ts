@@ -4,7 +4,7 @@ import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
 
-describe('AppController (e2e)', () => {
+describe('AppController & EmbroideryController (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
@@ -21,6 +21,14 @@ describe('AppController (e2e)', () => {
       .get('/')
       .expect(200)
       .expect('Hello World!');
+  });
+
+  it('/api/dashboard (GET)', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/dashboard')
+      .expect(200);
+    expect(res.body.orders).toBeDefined();
+    expect(res.body.metrics).toBeDefined();
   });
 
   afterEach(async () => {

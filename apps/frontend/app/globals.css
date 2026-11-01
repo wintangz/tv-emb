@@ -1,26 +1,85 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --tv-bg: #090d16;
+  --tv-surface: #111827;
+  --tv-surface-2: #1e293b;
+  --tv-border: #1f2937;
+  --tv-text: #f8fafc;
+  --tv-text-muted: #94a3b8;
+  --tv-accent: #f59e0b;
+  --tv-accent-fg: #090d16;
+  --tv-radius: 0.75rem;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--tv-bg);
+  color: var(--tv-text);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Theme-aware helper classes */
+.tv-bg {
+  background-color: var(--tv-bg);
+}
+.tv-surface {
+  background-color: var(--tv-surface);
+}
+.tv-surface-2 {
+  background-color: var(--tv-surface-2);
+}
+.tv-border {
+  border-color: var(--tv-border);
+}
+.tv-text {
+  color: var(--tv-text);
+}
+.tv-text-muted {
+  color: var(--tv-text-muted);
+}
+.tv-accent-bg {
+  background-color: var(--tv-accent);
+  color: var(--tv-accent-fg);
+}
+.tv-accent-text {
+  color: var(--tv-accent);
+}
+.tv-accent-border {
+  border-color: var(--tv-accent);
+}
+.tv-card {
+  background-color: var(--tv-surface);
+  border: 1px solid var(--tv-border);
+  border-radius: var(--tv-radius);
+  box-shadow:
+    0 6px 24px -6px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+.tv-card:hover {
+  border-color: color-mix(in srgb, var(--tv-accent) 32%, var(--tv-border));
+}
+.tv-input {
+  background-color: var(--tv-surface-2);
+  border: 1px solid var(--tv-border);
+  color: var(--tv-text);
+  border-radius: calc(var(--tv-radius) * 0.75);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.tv-input:focus {
+  outline: none;
+  border-color: var(--tv-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tv-accent) 24%, transparent);
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
 }

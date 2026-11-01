@@ -1,0 +1,363 @@
+"use client";
+
+import React from "react";
+import type {
+  EmbroideryDesign,
+  EmbroideryMachine,
+  EmbroideryOrder,
+  GarmentPlacement,
+  OrderStatus,
+  PaymentStatus,
+} from "@/lib/types";
+import { formatVnd, formatVndCompact } from "@/lib/currency";
+import {
+  ORDER_STAGE_FLOW,
+  PAYMENT_BADGE_STYLES,
+  STATUS_BADGE_STYLES,
+} from "./studio-constants";
+
+interface WorkOrdersTabProps {
+  vi: boolean;
+  filteredOrders: EmbroideryOrder[];
+  orderStatusFilter: OrderStatus | "ALL";
+  ordersViewMode: "list" | "kanban";
+  orderSearch: string;
+  designById: Map<string, EmbroideryDesign>;
+  machineById: Map<string, EmbroideryMachine>;
+  statusLabels: Record<OrderStatus, string>;
+  paymentLabels: Record<PaymentStatus, string>;
+  placementLabels: Record<GarmentPlacement, string>;
+  onChangeStatusFilter: (status: OrderStatus | "ALL") => void;
+  onChangeViewMode: (mode: "list" | "kanban") => void;
+  onChangeSearch: (q: string) => void;
+  onOpenJobTicket: (order: EmbroideryOrder) => void;
+  onEditOrder: (order: EmbroideryOrder) => void;
+  onAdvanceOrderStatus: (order: EmbroideryOrder) => void;
+  onDeleteOrder: (orderId: string, orderNumber: string) => void;
+}
+
+const KANBAN_STAGES: OrderStatus[] = [
+  "DIGITIZING",
+  "APPROVAL_PENDING",
+  "IN_PRODUCTION",
+  "QUALITY_CHECK",
+  "COMPLETED",
+];
+
+function WorkOrdersTab({
+  vi,
+  filteredOrders,
+  orderStatusFilter,
+  ordersViewMode,
+  orderSearch,
+  designById,
+  machineById,
+  statusLabels,
+  paymentLabels,
+  placementLabels,
+  onChangeStatusFilter,
+  onChangeViewMode,
+  onChangeSearch,
+  onOpenJobTicket,
+  onEditOrder,
+  onAdvanceOrderStatus,
+  onDeleteOrder,
+}: WorkOrdersTabProps) {
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {(["ALL", ...ORDER_STAGE_FLOW] as const).map((st) => (
+            <button
+              key={st}
+              onClick={() => onChangeStatusFilter(st)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                orderStatusFilter === st
+                  ? "tv-accent-bg font-bold"
+                  : "tv-surface tv-border border tv-text-muted"
+              }`}
+            >
+              {st === "ALL"
+                ? vi
+                  ? "Tất Cả Công Đoạn"
+                  : "All Stages"
+                : statusLabels[st]}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* View Switcher: List vs Kanban */}
+          <div className="tv-surface tv-border flex rounded-lg border p-0.5">
+            <button
+              onClick={() => onChangeViewMode("list")}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold cursor-pointer ${
+                ordersViewMode === "list" ? "tv-accent-bg" : "tv-text-muted"
+              }`}
+            >
+              ☰ {vi ? "Danh Sách" : "List"}
+            </button>
+            <button
+              onClick={() => onChangeViewMode("kanban")}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold cursor-pointer ${
+                ordersViewMode === "kanban" ? "tv-accent-bg" : "tv-text-muted"
+              }`}
+            >
+              ⊞ {vi ? "Bảng chuyền (Kanban)" : "Kanban Board"}
+            </button>
+          </div>
+
+          <input
+            type="text"
+            value={orderSearch}
+            onChange={(e) => onChangeSearch(e.target.value)}
+            placeholder={
+              vi
+                ? "Tìm mã TV#, khách hàng, loại áo..."
+                : "Search TV#, client, garment..."
+            }
+            className="tv-input px-3 py-1.5 text-xs"
+          />
+        </div>
+      </div>
+
+      {ordersViewMode === "kanban" ? (
+        /* KANBAN PIPELINE VIEW */
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-5">
+          {KANBAN_STAGES.map((stage) => {
+            const stageOrders = filteredOrders.filter(
+              (o) => o.status === stage,
+            );
+            return (
+              <div key={stage} className="tv-card p-3.5 flex flex-col gap-3">
+                <div className="flex items-center justify-between border-b tv-border pb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider">
+                    {statusLabels[stage]}
+                  </span>
+                  <span className="tv-surface-2 rounded-full px-2 py-0.5 font-mono text-[10px] font-bold">
+                    {stageOrders.length}
+                  </span>
+                </div>
+                <div className="space-y-2.5">
+                  {stageOrders.map((order) => (
+                    <div
+                      key={order.id}
+                      className="tv-surface-2 tv-border rounded-xl border p-3 space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-xs font-bold tv-accent-text">
+                          {order.orderNumber}
+                        </span>
+                        {order.rushOrder && (
+                          <span className="rounded bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold text-rose-400">
+                            {vi ? "GẤP" : "RUSH"}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-bold leading-snug">
+                        {order.companyName}
+                      </p>
+                      <p className="text-[11px] tv-text-muted">
+                        {order.quantity} {vi ? "cái" : "pcs"} •{" "}
+                        <span className="font-mono text-emerald-400">
+                          {formatVndCompact(order.totalPrice, vi)}
+                        </span>
+                      </p>
+                      <div className="flex items-center justify-between pt-1">
+                        <button
+                          onClick={() => onOpenJobTicket(order)}
+                          className="text-[11px] tv-text-muted hover:underline cursor-pointer"
+                        >
+                          🖨 {vi ? "Phiếu SX" : "Ticket"}
+                        </button>
+                        <button
+                          onClick={() => onAdvanceOrderStatus(order)}
+                          className="tv-accent-bg rounded px-2 py-0.5 text-[10px] font-bold cursor-pointer"
+                        >
+                          {vi ? "Tiếp →" : "Next →"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {stageOrders.length === 0 && (
+                    <p className="py-6 text-center text-[11px] tv-text-muted">
+                      {vi ? "Không có đơn ở khâu này" : "No orders in stage"}
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* DETAILED LIST VIEW */
+        <div className="space-y-3">
+          {filteredOrders.map((order) => {
+            const pct =
+              order.quantity > 0
+                ? Math.round((order.completedQuantity / order.quantity) * 100)
+                : 0;
+            const design = designById.get(order.designId);
+            const machine = order.assignedMachineId
+              ? machineById.get(order.assignedMachineId)
+              : undefined;
+            return (
+              <div key={order.id} className="tv-card p-4">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm font-bold tv-accent-text">
+                        {order.orderNumber}
+                      </span>
+                      <span
+                        className={`rounded-md border px-2.5 py-0.5 text-xs font-semibold ${
+                          STATUS_BADGE_STYLES[order.status]
+                        }`}
+                      >
+                        {statusLabels[order.status]}
+                      </span>
+                      <span
+                        className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
+                          PAYMENT_BADGE_STYLES[order.paymentStatus ?? "UNPAID"]
+                        }`}
+                      >
+                        {paymentLabels[order.paymentStatus ?? "UNPAID"]} (
+                        {formatVnd(order.amountPaid ?? 0)} /{" "}
+                        {formatVnd(order.totalPrice)})
+                      </span>
+                      {order.rushOrder && (
+                        <span className="rounded-md bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 text-[11px] font-bold text-rose-400">
+                          {vi ? "ĐƠN GẤP" : "RUSH ORDER"}
+                        </span>
+                      )}
+                      <span className="tv-surface-2 rounded-md px-2 py-0.5 text-xs tv-text-muted">
+                        {vi ? "Vị trí:" : "Placement:"}{" "}
+                        {placementLabels[order.placement]}
+                      </span>
+                      {machine && (
+                        <span className="rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-xs text-emerald-400">
+                          {machine.name}
+                        </span>
+                      )}
+                    </div>
+
+                    <h3 className="text-base font-bold">
+                      {order.companyName}{" "}
+                      <span className="font-normal tv-text-muted">
+                        ({order.customerName})
+                      </span>
+                    </h3>
+
+                    <p className="text-xs tv-text-muted">
+                      <span className="font-semibold tv-text">
+                        {order.garmentType}
+                      </span>{" "}
+                      ({order.garmentColor}) • {vi ? "Mẫu thêu:" : "Design:"}{" "}
+                      <span className="underline">{order.designName}</span> (
+                      {design?.code ?? "DST"})
+                    </p>
+
+                    {order.notes && (
+                      <p className="text-xs italic tv-text-muted">
+                        {vi ? "Ghi chú xưởng:" : "Shop Note:"} &ldquo;
+                        {order.notes}&rdquo;
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-5">
+                    <div className="text-right">
+                      <p className="text-xs tv-text-muted">
+                        {vi ? "Số Mũi / Sản Phẩm" : "Stitches / Piece"}
+                      </p>
+                      <p className="font-mono text-sm font-bold">
+                        {order.stitchCount.toLocaleString()}{" "}
+                        {vi ? "mũi" : "st"}
+                      </p>
+                      <div className="mt-1 flex justify-end gap-1">
+                        {order.threadColors.map((hex, idx) => (
+                          <span
+                            key={idx}
+                            className="h-3.5 w-3.5 rounded-full border border-slate-500"
+                            style={{ backgroundColor: hex }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <p className="text-xs tv-text-muted">
+                        {vi ? "Số Lượng" : "Quantity"}
+                      </p>
+                      <p className="font-mono text-sm font-bold">
+                        {order.completedQuantity} / {order.quantity}{" "}
+                        {vi ? "cái" : "pcs"}
+                      </p>
+                      <div className="tv-surface-2 mt-1 h-1.5 w-24 overflow-hidden rounded-full">
+                        <div
+                          className="h-full"
+                          style={{
+                            width: `${pct}%`,
+                            backgroundColor: "var(--tv-accent)",
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <p className="text-xs tv-text-muted">
+                        {vi ? "Tổng Tiền" : "Order Total"}
+                      </p>
+                      <p className="font-mono text-base font-bold text-emerald-400">
+                        {formatVnd(order.totalPrice)}
+                      </p>
+                      <p className="text-[11px] tv-text-muted">
+                        {formatVnd(order.unitPrice)}/{vi ? "cái" : "pc"} •{" "}
+                        {vi ? "Giao" : "Due"} {order.dueDate}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        onClick={() => onOpenJobTicket(order)}
+                        className="tv-surface-2 tv-border rounded-lg border px-3 py-1.5 text-xs font-semibold hover:opacity-85 cursor-pointer"
+                      >
+                        🖨{" "}
+                        {vi ? "Phiếu SX / Hóa Đơn" : "Job Sheet / Invoice"}
+                      </button>
+                      <button
+                        onClick={() => onEditOrder(order)}
+                        className="tv-surface-2 tv-border rounded-lg border px-3 py-1.5 text-xs font-semibold hover:opacity-85 cursor-pointer"
+                      >
+                        {vi ? "Sửa" : "Edit"}
+                      </button>
+                      {order.status !== "DELIVERED" && (
+                        <button
+                          onClick={() => onAdvanceOrderStatus(order)}
+                          className="tv-accent-bg rounded-lg px-3 py-1.5 text-xs font-bold cursor-pointer"
+                        >
+                          {vi ? "Chuyển Bước →" : "Advance →"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() =>
+                          onDeleteOrder(order.id, order.orderNumber)
+                        }
+                        className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1.5 text-xs tv-text-muted hover:text-rose-400 cursor-pointer"
+                      >
+                        {vi ? "Xóa" : "Delete"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default React.memo(WorkOrdersTab);
+
