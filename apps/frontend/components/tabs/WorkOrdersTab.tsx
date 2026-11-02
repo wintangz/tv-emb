@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import type {
   EmbroideryDesign,
   EmbroideryMachine,
@@ -10,6 +10,7 @@ import type {
   PaymentStatus,
 } from "@/lib/types";
 import { formatVnd, formatVndCompact } from "@/lib/currency";
+import PaginationBar from "../PaginationBar";
 import {
   ORDER_STAGE_FLOW,
   PAYMENT_BADGE_STYLES,
@@ -27,6 +28,7 @@ interface WorkOrdersTabProps {
   statusLabels: Record<OrderStatus, string>;
   paymentLabels: Record<PaymentStatus, string>;
   placementLabels: Record<GarmentPlacement, string>;
+  canViewFinancials?: boolean;
   onChangeStatusFilter: (status: OrderStatus | "ALL") => void;
   onChangeViewMode: (mode: "list" | "kanban") => void;
   onChangeSearch: (q: string) => void;
@@ -34,6 +36,7 @@ interface WorkOrdersTabProps {
   onEditOrder: (order: EmbroideryOrder) => void;
   onAdvanceOrderStatus: (order: EmbroideryOrder) => void;
   onDeleteOrder: (orderId: string, orderNumber: string) => void;
+  onAdjustDefectCount?: (order: EmbroideryOrder, delta: number) => void;
 }
 
 const KANBAN_STAGES: OrderStatus[] = [
@@ -55,6 +58,7 @@ function WorkOrdersTab({
   statusLabels,
   paymentLabels,
   placementLabels,
+  canViewFinancials = true,
   onChangeStatusFilter,
   onChangeViewMode,
   onChangeSearch,
@@ -62,7 +66,23 @@ function WorkOrdersTab({
   onEditOrder,
   onAdvanceOrderStatus,
   onDeleteOrder,
+  onAdjustDefectCount,
 }: WorkOrdersTabProps) {
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(4);
+
+  const effectiveSize =
+    pageSize <= 0 ? Math.max(1, filteredOrders.length) : pageSize;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredOrders.length / effectiveSize),
+  );
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const pagedOrders = filteredOrders.slice(
+    (safePage - 1) * effectiveSize,
+    safePage * effectiveSize,
+  );
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -70,7 +90,10 @@ function WorkOrdersTab({
           {(["ALL", ...ORDER_STAGE_FLOW] as const).map((st) => (
             <button
               key={st}
-              onClick={() => onChangeStatusFilter(st)}
+              onClick={() => {
+                onChangeStatusFilter(st);
+                setCurrentPage(1);
+              }}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
                 orderStatusFilter === st
                   ? "tv-accent-bg font-bold"
@@ -110,7 +133,10 @@ function WorkOrdersTab({
           <input
             type="text"
             value={orderSearch}
-            onChange={(e) => onChangeSearch(e.target.value)}
+            onChange={(e) => {
+              onChangeSearch(e.target.value);
+              setCurrentPage(1);
+            }}
             placeholder={
               vi
                 ? "Tìm mã TV#, khách hàng, loại áo..."
@@ -159,9 +185,16 @@ function WorkOrdersTab({
                       </p>
                       <p className="text-[11px] tv-text-muted">
                         {order.quantity} {vi ? "cái" : "pcs"} •{" "}
-                        <span className="font-mono text-emerald-400">
-                          {formatVndCompact(order.totalPrice, vi)}
-                        </span>
+                        {canViewFinancials ? (
+                          <span className="font-mono text-emerald-400">
+                            {formatVndCompact(order.totalPrice, vi)}
+                          </span>
+                        ) : (
+                          <span className="font-mono tv-accent-text">
+                            {order.stitchCount.toLocaleString()}{" "}
+                            {vi ? "mũi" : "st"}
+                          </span>
+                        )}
                       </p>
                       <div className="flex items-center justify-between pt-1">
                         <button
@@ -192,7 +225,7 @@ function WorkOrdersTab({
       ) : (
         /* DETAILED LIST VIEW */
         <div className="space-y-3">
-          {filteredOrders.map((order) => {
+          {pagedOrders.map((order) => {
             const pct =
               order.quantity > 0
                 ? Math.round((order.completedQuantity / order.quantity) * 100)
@@ -216,15 +249,23 @@ function WorkOrdersTab({
                       >
                         {statusLabels[order.status]}
                       </span>
-                      <span
-                        className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
-                          PAYMENT_BADGE_STYLES[order.paymentStatus ?? "UNPAID"]
-                        }`}
-                      >
-                        {paymentLabels[order.paymentStatus ?? "UNPAID"]} (
-                        {formatVnd(order.amountPaid ?? 0)} /{" "}
-                        {formatVnd(order.totalPrice)})
-                      </span>
+                      {canViewFinancials && (
+                        <span
+                          className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
+                            PAYMENT_BADGE_STYLES[order.paymentStatus ?? "UNPAID"]
+                          }`}
+                        >
+                          {paymentLabels[order.paymentStatus ?? "UNPAID"]} (
+                          {formatVnd(order.amountPaid ?? 0)} /{" "}
+                          {formatVnd(order.totalPrice)})
+                        </span>
+                      )}
+                      {(order.defectQuantity ?? 0) > 0 && (
+                        <span className="rounded-md bg-rose-500/15 border border-rose-500/35 px-2 py-0.5 text-[11px] font-bold text-rose-400">
+                          ⚠ {order.defectQuantity}{" "}
+                          {vi ? "áo lỗi QC" : "defects"}
+                        </span>
+                      )}
                       {order.rushOrder && (
                         <span className="rounded-md bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 text-[11px] font-bold text-rose-400">
                           {vi ? "ĐƠN GẤP" : "RUSH ORDER"}
@@ -304,18 +345,32 @@ function WorkOrdersTab({
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <p className="text-xs tv-text-muted">
-                        {vi ? "Tổng Tiền" : "Order Total"}
-                      </p>
-                      <p className="font-mono text-base font-bold text-emerald-400">
-                        {formatVnd(order.totalPrice)}
-                      </p>
-                      <p className="text-[11px] tv-text-muted">
-                        {formatVnd(order.unitPrice)}/{vi ? "cái" : "pc"} •{" "}
-                        {vi ? "Giao" : "Due"} {order.dueDate}
-                      </p>
-                    </div>
+                    {canViewFinancials ? (
+                      <div className="text-right">
+                        <p className="text-xs tv-text-muted">
+                          {vi ? "Tổng Tiền" : "Order Total"}
+                        </p>
+                        <p className="font-mono text-base font-bold text-emerald-400">
+                          {formatVnd(order.totalPrice)}
+                        </p>
+                        <p className="text-[11px] tv-text-muted">
+                          {formatVnd(order.unitPrice)}/{vi ? "cái" : "pc"} •{" "}
+                          {vi ? "Giao" : "Due"} {order.dueDate}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="text-right">
+                        <p className="text-xs tv-text-muted">
+                          {vi ? "Hạn Giao & QC" : "Due & QC"}
+                        </p>
+                        <p className="font-mono text-xs font-bold tv-accent-text">
+                          {order.dueDate}
+                        </p>
+                        <p className="text-[10px] tv-text-muted">
+                          🔒 {vi ? "Chế độ kỹ thuật xưởng" : "Shop Floor Mode"}
+                        </p>
+                      </div>
+                    )}
 
                     <div className="flex flex-wrap gap-1.5">
                       <button
@@ -323,14 +378,35 @@ function WorkOrdersTab({
                         className="tv-surface-2 tv-border rounded-lg border px-3 py-1.5 text-xs font-semibold hover:opacity-85 cursor-pointer"
                       >
                         🖨{" "}
-                        {vi ? "Phiếu SX / Hóa Đơn" : "Job Sheet / Invoice"}
+                        {canViewFinancials
+                          ? vi
+                            ? "Phiếu SX / Duyệt Mẫu / VietQR"
+                            : "Job Sheet / Proof / VietQR"
+                          : vi
+                            ? "Phiếu SX & Duyệt Mẫu"
+                            : "Job Sheet & Proof"}
                       </button>
-                      <button
-                        onClick={() => onEditOrder(order)}
-                        className="tv-surface-2 tv-border rounded-lg border px-3 py-1.5 text-xs font-semibold hover:opacity-85 cursor-pointer"
-                      >
-                        {vi ? "Sửa" : "Edit"}
-                      </button>
+                      {onAdjustDefectCount && (
+                        <button
+                          onClick={() => onAdjustDefectCount(order, 1)}
+                          className="rounded-lg border border-rose-500/35 bg-rose-500/10 px-2.5 py-1.5 text-xs font-semibold text-rose-400 hover:bg-rose-500/20 cursor-pointer"
+                          title={
+                            vi
+                              ? "Ghi nhận +1 sản phẩm lỗi thêu / đứt chỉ"
+                              : "Log +1 defective/spoiled garment"
+                          }
+                        >
+                          +1 {vi ? "Lỗi" : "Defect"}
+                        </button>
+                      )}
+                      {canViewFinancials && (
+                        <button
+                          onClick={() => onEditOrder(order)}
+                          className="tv-surface-2 tv-border rounded-lg border px-3 py-1.5 text-xs font-semibold hover:opacity-85 cursor-pointer"
+                        >
+                          {vi ? "Sửa" : "Edit"}
+                        </button>
+                      )}
                       {order.status !== "DELIVERED" && (
                         <button
                           onClick={() => onAdvanceOrderStatus(order)}
@@ -339,20 +415,33 @@ function WorkOrdersTab({
                           {vi ? "Chuyển Bước →" : "Advance →"}
                         </button>
                       )}
-                      <button
-                        onClick={() =>
-                          onDeleteOrder(order.id, order.orderNumber)
-                        }
-                        className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1.5 text-xs tv-text-muted hover:text-rose-400 cursor-pointer"
-                      >
-                        {vi ? "Xóa" : "Delete"}
-                      </button>
+                      {canViewFinancials && (
+                        <button
+                          onClick={() =>
+                            onDeleteOrder(order.id, order.orderNumber)
+                          }
+                          className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1.5 text-xs tv-text-muted hover:text-rose-400 cursor-pointer"
+                        >
+                          {vi ? "Xóa" : "Delete"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
             );
           })}
+
+          <PaginationBar
+            vi={vi}
+            currentPage={safePage}
+            pageSize={pageSize}
+            totalItems={filteredOrders.length}
+            pageSizeOptions={[4, 6, 10, 20]}
+            unitLabel={vi ? "lệnh sản xuất" : "work orders"}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       )}
     </div>

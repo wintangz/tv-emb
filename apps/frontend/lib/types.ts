@@ -22,6 +22,8 @@ export type GarmentPlacement =
 
 export type MachineStatus = "RUNNING" | "IDLE" | "SETUP" | "MAINTENANCE";
 
+export type StudioRole = "ADMIN" | "SALES" | "DIGITIZER" | "OPERATOR";
+
 export interface SizeBreakdown {
   S: number;
   M: number;
@@ -58,6 +60,8 @@ export interface EmbroideryOrder {
   unitPrice: number;
   totalPrice: number;
   notes: string;
+  defectQuantity?: number;
+  threadMetersUsed?: number;
 }
 
 export interface ColorStop {

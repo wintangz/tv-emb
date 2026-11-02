@@ -1,8 +1,9 @@
 "use client";
 
-import React, { memo } from "react";
+import React, { memo, useState } from "react";
 import type { InventoryItem } from "@/lib/types";
 import { formatVnd } from "@/lib/currency";
+import PaginationBar from "../PaginationBar";
 
 export interface InventoryTabProps {
   vi: boolean;
@@ -33,6 +34,21 @@ const InventoryTab = memo(function InventoryTab({
   onDeleteInventory,
   onAdjustStock,
 }: InventoryTabProps) {
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(6);
+
+  const effectiveSize =
+    pageSize <= 0 ? Math.max(1, filteredInventory.length) : pageSize;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredInventory.length / effectiveSize),
+  );
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const pagedInventory = filteredInventory.slice(
+    (safePage - 1) * effectiveSize,
+    safePage * effectiveSize,
+  );
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -63,7 +79,10 @@ const InventoryTab = memo(function InventoryTab({
           ].map((cat) => (
             <button
               key={cat.id}
-              onClick={() => onSetInventoryCategoryFilter(cat.id)}
+              onClick={() => {
+                onSetInventoryCategoryFilter(cat.id);
+                setCurrentPage(1);
+              }}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
                 inventoryCategoryFilter === cat.id
                   ? "tv-accent-bg font-bold"
@@ -79,7 +98,10 @@ const InventoryTab = memo(function InventoryTab({
           <input
             type="text"
             value={inventorySearch}
-            onChange={(e) => onSetInventorySearch(e.target.value)}
+            onChange={(e) => {
+              onSetInventorySearch(e.target.value);
+              setCurrentPage(1);
+            }}
             placeholder={
               vi
                 ? "Tìm mã chỉ Madeira, màu sắc..."
@@ -105,7 +127,7 @@ const InventoryTab = memo(function InventoryTab({
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {filteredInventory.map((item) => {
+        {pagedInventory.map((item) => {
           const isLow = item.quantity <= item.minThreshold;
           return (
             <div
@@ -198,6 +220,17 @@ const InventoryTab = memo(function InventoryTab({
           );
         })}
       </div>
+
+      <PaginationBar
+        vi={vi}
+        currentPage={safePage}
+        pageSize={pageSize}
+        totalItems={filteredInventory.length}
+        pageSizeOptions={[6, 9, 12, 24]}
+        unitLabel={vi ? "mã chỉ & vật tư" : "supplies"}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+      />
     </div>
   );
 });

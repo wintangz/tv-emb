@@ -14,6 +14,7 @@ import type {
   OrderStatus,
   PaymentStatus,
   QuoteInput,
+  StudioRole,
 } from "@/lib/types";
 import type { ParsedDstResult } from "@/lib/dst-parser";
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/lib/seed-data";
 import { formatVnd } from "@/lib/currency";
 import JobTicketModal from "./JobTicketModal";
+import PayslipModal from "./PayslipModal";
 import ThemeCustomizer, {
   THEME_PRESETS,
   useStudioTheme,
@@ -83,6 +85,7 @@ export default function EmbroideryStudio() {
     getInitialDashboardPayload(),
   );
   const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
+  const [studioRole, setStudioRole] = useState<StudioRole>("ADMIN");
   const [ordersViewMode, setOrdersViewMode] = useState<"list" | "kanban">(
     "list",
   );
@@ -141,6 +144,68 @@ export default function EmbroideryStudio() {
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(
     null,
   );
+  const [activePayslipEmployee, setActivePayslipEmployee] =
+    useState<Employee | null>(null);
+
+  const canViewFinancials = studioRole === "ADMIN" || studioRole === "SALES";
+
+  function handleSelectTab(nextTab: ActiveTab) {
+    setActiveTab(nextTab);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", nextTab);
+      window.history.pushState({ tab: nextTab }, "", url.toString());
+    }
+  }
+
+  // Sync initial tab from URL (?tab=...) and support browser Back/Forward buttons
+  useEffect(() => {
+    const validTabs: ActiveTab[] = [
+      "overview",
+      "orders",
+      "designs",
+      "machines",
+      "inventory",
+      "quote",
+      "customers",
+      "employees",
+    ];
+    const readTabFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      const t = params.get("tab") as ActiveTab | null;
+      if (t && validTabs.includes(t)) {
+        setActiveTab(t);
+      }
+    };
+    readTabFromUrl();
+    window.addEventListener("popstate", readTabFromUrl);
+    return () => window.removeEventListener("popstate", readTabFromUrl);
+  }, []);
+
+  function handleSelectStudioRole(nextRole: StudioRole) {
+    setStudioRole(nextRole);
+    if (nextRole === "OPERATOR") {
+      if (
+        activeTab === "overview" ||
+        activeTab === "quote" ||
+        activeTab === "customers" ||
+        activeTab === "employees"
+      ) {
+        handleSelectTab("machines");
+      }
+    } else if (nextRole === "DIGITIZER") {
+      if (
+        activeTab === "overview" ||
+        activeTab === "quote" ||
+        activeTab === "customers" ||
+        activeTab === "employees"
+      ) {
+        handleSelectTab("designs");
+      }
+    } else if (nextRole === "SALES" && activeTab === "employees") {
+      handleSelectTab("overview");
+    }
+  }
 
   // Order Form State
   const [orderForm, setOrderForm] = useState<OrderFormState>({
@@ -787,6 +852,66 @@ export default function EmbroideryStudio() {
     }
   }
 
+  async function handleApproveProofToProduction(order: EmbroideryOrder) {
+    const nextStatus: OrderStatus = "IN_PRODUCTION";
+    setData((prev) => ({
+      ...prev,
+      orders: prev.orders.map((o) =>
+        o.id === order.id ? { ...o, status: nextStatus } : o,
+      ),
+    }));
+    if (activeJobTicketOrder?.id === order.id) {
+      setActiveJobTicketOrder((prev) =>
+        prev ? { ...prev, status: nextStatus } : null,
+      );
+    }
+    showToast(
+      vi
+        ? `Khách đã duyệt mẫu ${order.orderNumber} → Chuyển sang Đang Thêu Sản Xuất!`
+        : `Client proof approved for ${order.orderNumber} → Moved to In Production!`,
+    );
+
+    try {
+      await fetch(`${API_BASE}/orders/${order.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+    } catch {
+      // Optimistic
+    }
+  }
+
+  async function handleAdjustDefectCount(order: EmbroideryOrder, delta: number) {
+    const nextDefects = Math.max(0, (order.defectQuantity ?? 0) + delta);
+    setData((prev) => ({
+      ...prev,
+      orders: prev.orders.map((o) =>
+        o.id === order.id ? { ...o, defectQuantity: nextDefects } : o,
+      ),
+    }));
+    if (activeJobTicketOrder?.id === order.id) {
+      setActiveJobTicketOrder((prev) =>
+        prev ? { ...prev, defectQuantity: nextDefects } : null,
+      );
+    }
+    showToast(
+      vi
+        ? `Cập nhật hàng lỗi QC đơn ${order.orderNumber}: ${nextDefects} cái`
+        : `Updated QC spoilage for ${order.orderNumber}: ${nextDefects} pcs`,
+    );
+
+    try {
+      await fetch(`${API_BASE}/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ defectQuantity: nextDefects }),
+      });
+    } catch {
+      // Optimistic
+    }
+  }
+
   async function handleSaveOrder(e: React.FormEvent) {
     e.preventDefault();
     const customer =
@@ -1150,6 +1275,14 @@ export default function EmbroideryStudio() {
     const newOrderStatus: OrderStatus =
       newCompleted >= order.quantity ? "QUALITY_CHECK" : "IN_PRODUCTION";
     const addedStitches = batchSize * order.stitchCount;
+    const batchThreadMeters = Math.max(
+      1,
+      Math.round((addedStitches / 1000) * 5.2),
+    );
+    const prevMeters = order.threadMetersUsed ?? 0;
+    const nextMeters = prevMeters + batchThreadMeters;
+    const conesCrossed =
+      Math.floor(nextMeters / 2500) - Math.floor(prevMeters / 2500);
 
     setData((prev) => ({
       ...prev,
@@ -1159,6 +1292,7 @@ export default function EmbroideryStudio() {
               ...o,
               completedQuantity: newCompleted,
               status: newOrderStatus,
+              threadMetersUsed: nextMeters,
             }
           : o,
       ),
@@ -1171,6 +1305,14 @@ export default function EmbroideryStudio() {
             }
           : m,
       ),
+      inventory:
+        conesCrossed > 0
+          ? prev.inventory.map((item, idx) =>
+              item.category === "Thread" && idx === 0
+                ? { ...item, quantity: Math.max(0, item.quantity - conesCrossed) }
+                : item,
+            )
+          : prev.inventory,
       employees: (prev.employees ?? INITIAL_EMPLOYEES).map((emp) =>
         emp.assignedMachineId === machine.id && emp.status === "ACTIVE"
           ? {
@@ -1183,7 +1325,9 @@ export default function EmbroideryStudio() {
     }));
 
     showToast(
-      `Logged +${batchSize} pcs on ${machine.name} (${newCompleted}/${order.quantity} pcs)`,
+      vi
+        ? `Đã thêu xong +${batchSize} áo trên ${machine.name} (${newCompleted}/${order.quantity} áo • Tiêu hao ~${batchThreadMeters}m chỉ)`
+        : `Logged +${batchSize} pcs on ${machine.name} (${newCompleted}/${order.quantity} pcs • ~${batchThreadMeters}m thread used)`,
     );
 
     const assignedOperators = (data.employees ?? INITIAL_EMPLOYEES).filter(
@@ -1192,12 +1336,13 @@ export default function EmbroideryStudio() {
 
     try {
       await Promise.all([
-        fetch(`${API_BASE}/orders/${order.id}/status`, {
+        fetch(`${API_BASE}/orders/${order.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             status: newOrderStatus,
             completedQuantity: newCompleted,
+            threadMetersUsed: nextMeters,
           }),
         }),
         fetch(`${API_BASE}/machines/${machine.id}`, {
@@ -1617,6 +1762,65 @@ export default function EmbroideryStudio() {
     );
   }
 
+  async function handlePayAllUnpaidPayroll() {
+    const staffList = data.employees ?? INITIAL_EMPLOYEES;
+    const updatedStaff = staffList.map((emp) => {
+      const b =
+        employeePayrollSummary.breakdownById.get(emp.id) ??
+        calculateEmployeeCostBreakdown(emp);
+      return {
+        ...emp,
+        amountPaidMonth: b.totalCost,
+        paymentStatus: "PAID" as const,
+      };
+    });
+
+    setData((prev) => ({
+      ...prev,
+      employees: updatedStaff,
+    }));
+
+    showToast(
+      vi
+        ? "Đã chốt & tất toán đủ 100% bảng lương tháng cho toàn bộ nhân sự!"
+        : "Settled 100% of monthly payroll balances for all staff!",
+    );
+
+    try {
+      await Promise.all(
+        updatedStaff.map((emp) =>
+          fetch(`${API_BASE}/employees/${emp.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              amountPaidMonth: emp.amountPaidMonth,
+              paymentStatus: "PAID",
+            }),
+          }),
+        ),
+      );
+    } catch {
+      // Optimistic
+    }
+  }
+
+  function handleExportDatabaseJson() {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tuong-vinh-embroidery-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(
+      vi
+        ? "Đã tải file Sao Lưu Dữ Liệu Xưởng (.JSON)"
+        : "Downloaded Full Studio Database Backup (.JSON)",
+    );
+  }
+
   async function handleConvertQuoteToOrder() {
     const orderNumber = `TV-2610-${101 + data.orders.length}`;
     const payload: Partial<EmbroideryOrder> = {
@@ -1680,7 +1884,7 @@ export default function EmbroideryStudio() {
       }));
     }
 
-    setActiveTab("orders");
+    handleSelectTab("orders");
     showToast(`Quote converted to Work Order ${orderNumber}!`);
   }
 
@@ -1742,7 +1946,7 @@ export default function EmbroideryStudio() {
     );
   }
 
-  const navItems: {
+  const allNavItems: {
     id: ActiveTab;
     label: string;
     badge?: string;
@@ -1801,8 +2005,35 @@ export default function EmbroideryStudio() {
     },
   ];
 
+  const navItems = allNavItems.filter((item) => {
+    if (studioRole === "OPERATOR") {
+      return (
+        item.id === "machines" ||
+        item.id === "orders" ||
+        item.id === "designs" ||
+        item.id === "inventory"
+      );
+    }
+    if (studioRole === "DIGITIZER") {
+      return (
+        item.id === "designs" ||
+        item.id === "orders" ||
+        item.id === "machines"
+      );
+    }
+    if (studioRole === "SALES") {
+      return item.id !== "employees";
+    }
+    return true;
+  });
+
+  const activeTabIndex = Math.max(
+    0,
+    navItems.findIndex((n) => n.id === activeTab),
+  );
+
   return (
-    <div className="tv-bg tv-text min-h-screen flex">
+    <div className="tv-bg tv-text min-h-screen flex lg:h-dvh lg:overflow-hidden print:h-auto print:overflow-visible">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="tv-surface tv-border fixed bottom-5 right-5 z-50 flex items-center gap-2.5 rounded-xl border px-4 py-3 text-sm font-semibold shadow-2xl print:hidden">
@@ -1814,16 +2045,16 @@ export default function EmbroideryStudio() {
         </div>
       )}
 
-      {/* ================= LEFT STUDIO SIDEBAR (when layout === 'sidebar') ================= */}
+      {/* ================= LEFT STUDIO SIDEBAR (FIXED 256px × 100dvh) ================= */}
       {theme.layout === "sidebar" && (
-        <aside className="tv-surface tv-border hidden w-64 shrink-0 flex-col justify-between border-r p-4 lg:flex print:hidden">
-          <div className="space-y-6">
-            {/* Brand Identity */}
-            <div className="flex items-center gap-3 px-2 pt-1">
+        <aside className="tv-surface tv-border hidden w-64 min-w-[16rem] max-w-[16rem] shrink-0 flex-col justify-between border-r p-4 lg:flex lg:h-dvh overflow-hidden print:hidden">
+          <div className="flex min-h-0 flex-1 flex-col">
+            {/* Brand Identity (Fixed Height) */}
+            <div className="flex shrink-0 items-center gap-3 px-2 pt-1 pb-5 border-b tv-border">
               <div className="tv-accent-bg flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black shadow-md">
                 TV
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <h1 className="truncate text-sm font-extrabold tracking-tight">
                   {vi ? "Thêu Tường Vinh" : "Tuong Vinh"}
                 </h1>
@@ -1833,27 +2064,29 @@ export default function EmbroideryStudio() {
               </div>
             </div>
 
-            {/* Navigation Links */}
-            <nav className="space-y-1">
+            {/* Navigation Links (Independent Scroll if needed, Fixed Button Size) */}
+            <nav className="mt-4 flex-1 space-y-1 overflow-y-auto pr-0.5">
               {navItems.map((item) => {
                 const isActive = activeTab === item.id;
                 return (
                   <button
                     key={item.id}
-                    onClick={() => setActiveTab(item.id)}
-                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-xs font-semibold transition cursor-pointer ${
+                    onClick={() => handleSelectTab(item.id)}
+                    className={`flex h-10 w-full items-center justify-between gap-2 rounded-xl px-3 text-xs font-semibold transition cursor-pointer ${
                       isActive
                         ? "tv-accent-bg font-bold shadow-sm"
                         : "tv-text-muted hover:opacity-100 hover:bg-white/5"
                     }`}
                   >
-                    <span className="flex items-center gap-2.5">
-                      <span className="text-sm leading-none">{item.icon}</span>
-                      <span>{item.label}</span>
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <span className="w-4 shrink-0 text-center text-sm leading-none">
+                        {item.icon}
+                      </span>
+                      <span className="truncate">{item.label}</span>
                     </span>
                     {item.badge && (
                       <span
-                        className={`rounded-md px-1.5 py-0.5 font-mono text-[10px] ${
+                        className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] ${
                           isActive
                             ? "bg-black/20 text-inherit"
                             : "tv-surface-2 tv-text-muted"
@@ -1868,8 +2101,8 @@ export default function EmbroideryStudio() {
             </nav>
           </div>
 
-          {/* Sidebar Bottom: Language, Theme Quick Switcher & Connection */}
-          <div className="space-y-2.5 border-t tv-border pt-4">
+          {/* Sidebar Bottom: Language, Theme Quick Switcher & Connection (Pinned Bottom) */}
+          <div className="shrink-0 space-y-2.5 border-t tv-border pt-3.5">
             <div className="tv-surface-2 tv-border grid grid-cols-2 gap-1 rounded-xl border p-1 text-xs font-bold">
               <button
                 onClick={() => setLocale("vi")}
@@ -1891,40 +2124,42 @@ export default function EmbroideryStudio() {
 
             <button
               onClick={() => setShowThemeDrawer(true)}
-              className="tv-surface-2 tv-border flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-xs font-semibold transition hover:opacity-90 cursor-pointer"
+              className="tv-surface-2 tv-border flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition hover:opacity-90 cursor-pointer"
             >
-              <span className="flex items-center gap-2">
+              <span className="flex min-w-0 items-center gap-2">
                 <span
-                  className="h-3.5 w-3.5 rounded-full border border-white/30"
+                  className="h-3.5 w-3.5 shrink-0 rounded-full border border-white/30"
                   style={{ backgroundColor: theme.accent }}
                 />
-                <span>
+                <span className="truncate">
                   {vi ? "Giao diện:" : "Theme:"} {theme.name}
                 </span>
               </span>
-              <span className="tv-accent-text text-[10px] font-bold">
+              <span className="tv-accent-text shrink-0 text-[10px] font-bold">
                 {vi ? "Tùy chỉnh" : "Customize"}
               </span>
             </button>
 
-            <div className="tv-surface-2 tv-border flex items-center justify-between rounded-xl border px-3 py-2 text-[11px]">
-              <span className="flex items-center gap-2 tv-text-muted">
+            <div className="tv-surface-2 tv-border flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-[11px]">
+              <span className="flex min-w-0 items-center gap-2 tv-text-muted truncate">
                 <span
-                  className={`h-2 w-2 rounded-full ${
+                  className={`h-2 w-2 shrink-0 rounded-full ${
                     backendConnected ? "bg-emerald-400" : "bg-amber-400"
                   }`}
                 />
-                {backendConnected
-                  ? vi
-                    ? "Đã kết nối API (:3001)"
-                    : "API Synced (:3001)"
-                  : vi
-                    ? "Chế độ Lưu Cục Bộ"
-                    : "Local Sync Active"}
+                <span className="truncate">
+                  {backendConnected
+                    ? vi
+                      ? "Đã kết nối API (:3001)"
+                      : "API Synced (:3001)"
+                    : vi
+                      ? "Chế độ Lưu Cục Bộ"
+                      : "Local Sync Active"}
+                </span>
               </span>
               <button
                 onClick={handleResetDemo}
-                className="tv-text-muted hover:underline cursor-pointer"
+                className="tv-text-muted shrink-0 hover:underline cursor-pointer"
                 title={vi ? "Khôi phục dữ liệu mẫu" : "Reset demo data"}
               >
                 {vi ? "Khôi phục" : "Reset"}
@@ -1934,39 +2169,102 @@ export default function EmbroideryStudio() {
         </aside>
       )}
 
-      {/* ================= MAIN WORKSPACE AREA ================= */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* ================= MAIN WORKSPACE AREA (INDEPENDENT SCROLL) ================= */}
+      <div className="flex min-w-0 flex-1 flex-col lg:h-dvh lg:overflow-y-auto print:h-auto print:overflow-visible">
         {/* Top Command Header */}
-        <header className="tv-surface tv-border sticky top-0 z-30 border-b px-6 py-3.5 print:hidden">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h2 className="text-base font-extrabold tracking-tight">
+        <header className="tv-surface tv-border sticky top-0 z-30 border-b px-6 py-3 print:hidden">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-extrabold tracking-tight truncate">
                   {navItems.find((n) => n.id === activeTab)?.label ??
                     "Tuong Vinh Embroidery"}
                 </h2>
-                <span className="tv-surface-2 tv-border tv-accent-text rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
-                  Xưởng Thêu Vi Tính Tường Vinh
+                <span className="tv-surface-2 tv-border tv-accent-text rounded-md border px-2 py-0.5 font-mono text-[10px] font-bold">
+                  {vi ? "Trang" : "Page"} {activeTabIndex + 1}/{navItems.length}{" "}
+                  • /?tab={activeTab}
                 </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={activeTabIndex <= 0}
+                    onClick={() => {
+                      const prev = navItems[activeTabIndex - 1];
+                      if (prev) handleSelectTab(prev.id);
+                    }}
+                    className={`tv-surface-2 tv-border rounded-md border px-1.5 py-0.5 text-[11px] font-bold ${
+                      activeTabIndex <= 0
+                        ? "opacity-40 cursor-not-allowed"
+                        : "hover:opacity-85 cursor-pointer"
+                    }`}
+                    title={vi ? "Trang phân hệ trước" : "Previous module page"}
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeTabIndex >= navItems.length - 1}
+                    onClick={() => {
+                      const next = navItems[activeTabIndex + 1];
+                      if (next) handleSelectTab(next.id);
+                    }}
+                    className={`tv-surface-2 tv-border rounded-md border px-1.5 py-0.5 text-[11px] font-bold ${
+                      activeTabIndex >= navItems.length - 1
+                        ? "opacity-40 cursor-not-allowed"
+                        : "hover:opacity-85 cursor-pointer"
+                    }`}
+                    title={vi ? "Trang phân hệ tiếp theo" : "Next module page"}
+                  >
+                    ›
+                  </button>
+                </div>
               </div>
-              <p className="tv-text-muted text-xs">
+              <p className="tv-text-muted text-xs truncate">
                 {vi
                   ? `${metrics.runningMachinesCount}/${metrics.totalMachinesCount} dàn máy đang chạy • ${metrics.totalQueuedStitches.toLocaleString()} mũi thêu đang chờ sản xuất`
                   : `${metrics.runningMachinesCount} of ${metrics.totalMachinesCount} embroidery lines running • ${metrics.totalQueuedStitches.toLocaleString()} stitches queued`}
               </p>
             </div>
 
-            {/* Right Quick Actions & Theme Button */}
-            <div className="flex flex-wrap items-center gap-2">
+            {/* Right Quick Actions, Role Switcher & Theme Button */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <div className="tv-surface-2 tv-border flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs">
+                <span className="tv-text-muted text-[10px] font-bold uppercase">
+                  {vi ? "Vai trò:" : "Role:"}
+                </span>
+                <select
+                  value={studioRole}
+                  onChange={(e) =>
+                    handleSelectStudioRole(e.target.value as StudioRole)
+                  }
+                  className="bg-transparent font-extrabold tv-accent-text outline-hidden cursor-pointer"
+                  title={
+                    vi
+                      ? "Chuyển đổi phân quyền giao diện xưởng"
+                      : "Switch workshop role & permissions"
+                  }
+                >
+                  <option value="ADMIN" className="bg-slate-900 text-white">
+                    {vi ? "👑 Chủ Xưởng (Full)" : "👑 Owner / Admin"}
+                  </option>
+                  <option value="SALES" className="bg-slate-900 text-white">
+                    {vi ? "💼 Kinh Doanh & Báo Giá" : "💼 Sales & Quotes"}
+                  </option>
+                  <option value="DIGITIZER" className="bg-slate-900 text-white">
+                    {vi ? "🎨 Kỹ Thuật Mẫu .DST" : "🎨 Digitizer (.DST)"}
+                  </option>
+                  <option value="OPERATOR" className="bg-slate-900 text-white">
+                    {vi ? "⚙ Thợ Đứng Máy (Kiosk)" : "⚙ Shop-Floor Kiosk"}
+                  </option>
+                </select>
+              </div>
+
               <button
                 onClick={() => setLocale(vi ? "en" : "vi")}
-                className="tv-input flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold cursor-pointer hover:opacity-85"
+                className="tv-input flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold cursor-pointer hover:opacity-85"
                 title={vi ? "Switch to English" : "Chuyển sang Tiếng Việt"}
               >
-                <span>{vi ? "🇻🇳 Tiếng Việt" : "🇺🇸 EN"}</span>
-                <span className="tv-text-muted text-[10px]">
-                  ⇄ {vi ? "EN" : "VI"}
-                </span>
+                <span>{vi ? "🇻🇳 VI" : "🇺🇸 EN"}</span>
               </button>
 
               <button
@@ -1983,23 +2281,23 @@ export default function EmbroideryStudio() {
                     radius: theme.radius,
                   });
                 }}
-                className="tv-input px-3 py-1.5 text-xs font-semibold cursor-pointer hover:opacity-85"
+                className="tv-input px-2.5 py-1.5 text-xs font-semibold cursor-pointer hover:opacity-85"
                 title={
                   vi ? "Đổi chế độ Sáng / Tối" : "Toggle Light / Dark Mode"
                 }
               >
                 {theme.mode === "dark"
                   ? vi
-                    ? "☀ Nền Sáng"
-                    : "☀ Light Mode"
+                    ? "☀ Sáng"
+                    : "☀ Light"
                   : vi
-                    ? "☾ Nền Tối"
-                    : "☾ Dark Mode"}
+                    ? "☾ Tối"
+                    : "☾ Dark"}
               </button>
 
               <button
                 onClick={() => setShowThemeDrawer(true)}
-                className="tv-input flex items-center gap-2 px-3 py-1.5 text-xs font-semibold cursor-pointer hover:opacity-85"
+                className="tv-input flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold cursor-pointer hover:opacity-85"
               >
                 <span
                   className="h-3 w-3 rounded-full"
@@ -2008,19 +2306,35 @@ export default function EmbroideryStudio() {
                 <span>🎨 {vi ? "Giao Diện" : "Theme"}</span>
               </button>
 
-              <button
-                onClick={handleExportOrdersCsv}
-                className="tv-input px-3 py-1.5 text-xs font-semibold cursor-pointer hover:opacity-85"
-              >
-                ⬇ {vi ? "Xuất CSV" : "Export CSV"}
-              </button>
+              {canViewFinancials && (
+                <>
+                  <button
+                    onClick={handleExportOrdersCsv}
+                    className="tv-input px-2.5 py-1.5 text-xs font-semibold cursor-pointer hover:opacity-85"
+                  >
+                    ⬇ CSV
+                  </button>
 
-              <button
-                onClick={() => openNewOrderModal()}
-                className="tv-accent-bg rounded-xl px-4 py-2 text-xs font-extrabold shadow-md transition hover:opacity-90 cursor-pointer"
-              >
-                + {vi ? "Tạo Lệnh Sản Xuất" : "New Work Order"}
-              </button>
+                  <button
+                    onClick={handleExportDatabaseJson}
+                    className="tv-input px-2.5 py-1.5 text-xs font-semibold cursor-pointer hover:opacity-85"
+                    title={
+                      vi
+                        ? "Sao lưu toàn bộ dữ liệu xưởng ra file .JSON"
+                        : "Download full studio database backup (.JSON)"
+                    }
+                  >
+                    💾 JSON
+                  </button>
+
+                  <button
+                    onClick={() => openNewOrderModal()}
+                    className="tv-accent-bg rounded-xl px-3.5 py-1.5 text-xs font-extrabold shadow-md transition hover:opacity-90 cursor-pointer"
+                  >
+                    + {vi ? "Tạo Lệnh SX" : "New Order"}
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -2036,7 +2350,7 @@ export default function EmbroideryStudio() {
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => handleSelectTab(tab.id)}
                     className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
                       isActive
                         ? "tv-accent-bg font-bold"
@@ -2065,7 +2379,7 @@ export default function EmbroideryStudio() {
               paymentLabels={PAYMENT_LABELS}
               machineLabels={MACHINE_LABELS}
               placementLabels={PLACEMENT_LABELS}
-              onSelectTab={setActiveTab}
+              onSelectTab={handleSelectTab}
               onLogMachineBatch={(machine) =>
                 void handleLogMachineBatch(machine)
               }
@@ -2083,6 +2397,7 @@ export default function EmbroideryStudio() {
           {activeTab === "orders" && (
             <WorkOrdersTab
               vi={vi}
+              canViewFinancials={canViewFinancials}
               filteredOrders={filteredOrders}
               orderStatusFilter={orderStatusFilter}
               ordersViewMode={ordersViewMode}
@@ -2099,6 +2414,9 @@ export default function EmbroideryStudio() {
               onEditOrder={openEditOrderModal}
               onAdvanceOrderStatus={(order) =>
                 void handleAdvanceOrderStatus(order)
+              }
+              onAdjustDefectCount={(order, delta) =>
+                void handleAdjustDefectCount(order, delta)
               }
               onDeleteOrder={(id, orderNumber) =>
                 void handleDeleteOrder(id, orderNumber)
@@ -2133,6 +2451,7 @@ export default function EmbroideryStudio() {
               onLogMachineBatch={(machine) =>
                 void handleLogMachineBatch(machine)
               }
+              onOpenJobTicket={setActiveJobTicketOrder}
             />
           )}
 
@@ -2214,6 +2533,8 @@ export default function EmbroideryStudio() {
               onQuickUpdateEmployee={(emp, patch, msg) =>
                 void handleQuickUpdateEmployee(emp, patch, msg)
               }
+              onOpenPayslipModal={setActivePayslipEmployee}
+              onPayAllUnpaidPayroll={() => void handlePayAllUnpaidPayroll()}
             />
           )}
         </main>
@@ -2229,11 +2550,12 @@ export default function EmbroideryStudio() {
         />
       )}
 
-      {/* ================= PRINTABLE JOB SHEET & INVOICE MODAL ================= */}
+      {/* ================= PRINTABLE JOB SHEET, PROOF & VAT INVOICE MODAL ================= */}
       {activeJobTicketOrder && (
         <JobTicketModal
           order={activeJobTicketOrder}
           locale={locale}
+          canViewFinancials={canViewFinancials}
           design={designById.get(activeJobTicketOrder.designId)}
           machine={
             activeJobTicketOrder.assignedMachineId
@@ -2242,6 +2564,54 @@ export default function EmbroideryStudio() {
           }
           onClose={() => setActiveJobTicketOrder(null)}
           onRecordPayment={handleRecordPayment}
+          onApproveProofToProduction={(order) =>
+            void handleApproveProofToProduction(order)
+          }
+          onAdjustDefectCount={(order, delta) =>
+            void handleAdjustDefectCount(order, delta)
+          }
+        />
+      )}
+
+      {/* ================= PRINTABLE INDIVIDUAL STAFF PAYSLIP MODAL ================= */}
+      {activePayslipEmployee && (
+        <PayslipModal
+          vi={vi}
+          employee={activePayslipEmployee}
+          breakdown={
+            employeePayrollSummary.breakdownById.get(activePayslipEmployee.id) ??
+            calculateEmployeeCostBreakdown(activePayslipEmployee)
+          }
+          assignedMachine={
+            activePayslipEmployee.assignedMachineId
+              ? machineById.get(activePayslipEmployee.assignedMachineId)
+              : undefined
+          }
+          roleLabels={EMPLOYEE_ROLE_LABELS}
+          shiftLabels={EMPLOYEE_SHIFT_LABELS}
+          salaryStatusLabels={SALARY_STATUS_LABELS}
+          onClose={() => setActivePayslipEmployee(null)}
+          onPayFullBalance={(emp, totalCost) => {
+            void handleQuickUpdateEmployee(
+              emp,
+              {
+                amountPaidMonth: totalCost,
+                paymentStatus: "PAID",
+              },
+              vi
+                ? `Đã tất toán lương cho ${emp.name}`
+                : `Settled full salary for ${emp.name}`,
+            );
+            setActivePayslipEmployee((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    amountPaidMonth: totalCost,
+                    paymentStatus: "PAID",
+                  }
+                : null,
+            );
+          }}
         />
       )}
 

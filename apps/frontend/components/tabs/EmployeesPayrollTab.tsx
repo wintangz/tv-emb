@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo } from "react";
+import React, { memo, useState } from "react";
 import type {
   DashboardMetrics,
   EmbroideryMachine,
@@ -13,6 +13,7 @@ import type {
 } from "@/lib/types";
 import { calculateEmployeeCostBreakdown } from "@/lib/seed-data";
 import { formatVnd, formatVndCompact } from "@/lib/currency";
+import PaginationBar from "../PaginationBar";
 import {
   EMPLOYEE_ROLES,
   EMPLOYEE_STATUS_BADGE_STYLES,
@@ -46,6 +47,8 @@ export interface EmployeesPayrollTabProps {
   onExportPayrollCsv: () => void;
   onOpenNewEmployeeModal: () => void;
   onOpenEditEmployeeModal: (emp: Employee) => void;
+  onOpenPayslipModal: (emp: Employee) => void;
+  onPayAllUnpaidPayroll: () => void;
   onDeleteEmployee: (id: string, name: string) => void;
   onQuickUpdateEmployee: (
     emp: Employee,
@@ -73,9 +76,26 @@ const EmployeesPayrollTab = memo(function EmployeesPayrollTab({
   onExportPayrollCsv,
   onOpenNewEmployeeModal,
   onOpenEditEmployeeModal,
+  onOpenPayslipModal,
+  onPayAllUnpaidPayroll,
   onDeleteEmployee,
   onQuickUpdateEmployee,
 }: EmployeesPayrollTabProps) {
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(4);
+
+  const effectiveSize =
+    pageSize <= 0 ? Math.max(1, filteredEmployees.length) : pageSize;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredEmployees.length / effectiveSize),
+  );
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const pagedEmployees = filteredEmployees.slice(
+    (safePage - 1) * effectiveSize,
+    safePage * effectiveSize,
+  );
+
   const {
     totalOvertimePay,
     totalStitchBonus,
@@ -110,7 +130,10 @@ const EmployeesPayrollTab = memo(function EmployeesPayrollTab({
           <input
             type="text"
             value={employeeSearch}
-            onChange={(e) => onSetEmployeeSearch(e.target.value)}
+            onChange={(e) => {
+              onSetEmployeeSearch(e.target.value);
+              setCurrentPage(1);
+            }}
             placeholder={
               vi
                 ? "Tìm tên, mã NV, bộ phận..."
@@ -118,6 +141,17 @@ const EmployeesPayrollTab = memo(function EmployeesPayrollTab({
             }
             className="tv-input px-3 py-1.5 text-xs"
           />
+          {metrics.unpaidLaborCost > 0 && (
+            <button
+              onClick={onPayAllUnpaidPayroll}
+              className="rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/25 cursor-pointer"
+            >
+              ✓{" "}
+              {vi
+                ? `Chốt & Tất Toán Lương (${formatVndCompact(metrics.unpaidLaborCost, vi)})`
+                : `Settle All Payroll (${formatVndCompact(metrics.unpaidLaborCost, vi)})`}
+            </button>
+          )}
           <button
             onClick={onExportPayrollCsv}
             className="tv-surface-2 tv-border rounded-xl border px-3 py-2 text-xs font-semibold hover:opacity-85 cursor-pointer"
@@ -232,7 +266,10 @@ const EmployeesPayrollTab = memo(function EmployeesPayrollTab({
       {/* Role Filter Pills */}
       <div className="flex flex-wrap items-center gap-1.5">
         <button
-          onClick={() => onSetEmployeeRoleFilter("ALL")}
+          onClick={() => {
+            onSetEmployeeRoleFilter("ALL");
+            setCurrentPage(1);
+          }}
           className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
             employeeRoleFilter === "ALL"
               ? "tv-accent-bg font-bold"
@@ -248,7 +285,10 @@ const EmployeesPayrollTab = memo(function EmployeesPayrollTab({
           return (
             <button
               key={role}
-              onClick={() => onSetEmployeeRoleFilter(role)}
+              onClick={() => {
+                onSetEmployeeRoleFilter(role);
+                setCurrentPage(1);
+              }}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
                 employeeRoleFilter === role
                   ? "tv-accent-bg font-bold"
@@ -263,7 +303,7 @@ const EmployeesPayrollTab = memo(function EmployeesPayrollTab({
 
       {/* Staff & Payroll Cards Grid */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {filteredEmployees.map((emp) => {
+        {pagedEmployees.map((emp) => {
           const breakdown =
             employeePayrollSummary.breakdownById.get(emp.id) ??
             calculateEmployeeCostBreakdown(emp);
@@ -544,6 +584,12 @@ const EmployeesPayrollTab = memo(function EmployeesPayrollTab({
                     )}
 
                     <button
+                      onClick={() => onOpenPayslipModal(emp)}
+                      className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1 text-[11px] font-semibold hover:opacity-85 cursor-pointer"
+                    >
+                      🖨 {vi ? "Phiếu Lương" : "Payslip"}
+                    </button>
+                    <button
                       onClick={() => onOpenEditEmployeeModal(emp)}
                       className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1 text-[11px] cursor-pointer"
                     >
@@ -562,6 +608,17 @@ const EmployeesPayrollTab = memo(function EmployeesPayrollTab({
           );
         })}
       </div>
+
+      <PaginationBar
+        vi={vi}
+        currentPage={safePage}
+        pageSize={pageSize}
+        totalItems={filteredEmployees.length}
+        pageSizeOptions={[4, 6, 10, 20]}
+        unitLabel={vi ? "nhân sự xưởng" : "staff members"}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+      />
     </div>
   );
 });

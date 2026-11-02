@@ -4,10 +4,12 @@ import React, { useRef, useState } from "react";
 import type { EmbroideryDesign } from "@/lib/types";
 import {
   type ParsedDstResult,
+  exportDesignToDstBinary,
   generateSampleDstBinary,
   parseDstBuffer,
 } from "@/lib/dst-parser";
 import DesignHoopPreview from "../DesignHoopPreview";
+import PaginationBar from "../PaginationBar";
 import type { DesignFormState, OrderFormState } from "./studio-constants";
 
 interface DesignsTabProps {
@@ -44,6 +46,16 @@ function DesignsTab({
     number | "ALL"
   >("ALL");
   const [parseError, setParseError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(4);
+
+  const effectiveSize = pageSize <= 0 ? Math.max(1, designs.length) : pageSize;
+  const totalPages = Math.max(1, Math.ceil(designs.length / effectiveSize));
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const pagedDesigns = designs.slice(
+    (safePage - 1) * effectiveSize,
+    safePage * effectiveSize,
+  );
 
   async function processDstFile(file: File) {
     setParseError(null);
@@ -484,7 +496,7 @@ function DesignsTab({
 
       {/* ================= DIGITIZED DESIGNS CATALOG GRID ================= */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {designs.map((des) => (
+        {pagedDesigns.map((des) => (
           <div
             key={des.id}
             className="tv-card p-5 flex flex-col justify-between"
@@ -585,6 +597,33 @@ function DesignsTab({
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => {
+                    const buf = exportDesignToDstBinary(des);
+                    const blob = new Blob([buf], {
+                      type: "application/octet-stream",
+                    });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${des.code || "TV-DESIGN"}.dst`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    onShowToast(
+                      vi
+                        ? `Đã xuất file máy thêu ${des.code}.dst`
+                        : `Exported machine file ${des.code}.dst`,
+                    );
+                  }}
+                  className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1 text-xs font-mono font-bold tv-accent-text hover:opacity-85 cursor-pointer"
+                  title={
+                    vi
+                      ? "Tải file nhị phân .DST chuẩn máy Tajima/Barudan"
+                      : "Download binary Tajima .DST file for USB/Machine"
+                  }
+                >
+                  ⬇ .DST
+                </button>
+                <button
+                  onClick={() => {
                     onOpenNewOrderModal({ designId: des.id });
                   }}
                   className="tv-accent-bg rounded-lg px-2.5 py-1 text-xs font-bold cursor-pointer"
@@ -608,6 +647,17 @@ function DesignsTab({
           </div>
         ))}
       </div>
+
+      <PaginationBar
+        vi={vi}
+        currentPage={safePage}
+        pageSize={pageSize}
+        totalItems={designs.length}
+        pageSizeOptions={[4, 6, 10, 20]}
+        unitLabel={vi ? "mẫu thêu .DST" : "designs"}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+      />
     </div>
   );
 }

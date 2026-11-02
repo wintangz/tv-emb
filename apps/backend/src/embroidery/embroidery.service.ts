@@ -319,6 +319,8 @@ export class EmbroideryService {
       unitPrice,
       totalPrice,
       notes: payload.notes ?? '',
+      defectQuantity: Number(payload.defectQuantity ?? 0),
+      threadMetersUsed: Number(payload.threadMetersUsed ?? 0),
     };
 
     this.db.orders.unshift(newOrder);
@@ -399,6 +401,12 @@ export class EmbroideryService {
       );
     }
     if (payload.notes !== undefined) order.notes = payload.notes;
+    if (payload.defectQuantity !== undefined) {
+      order.defectQuantity = Math.max(0, Number(payload.defectQuantity));
+    }
+    if (payload.threadMetersUsed !== undefined) {
+      order.threadMetersUsed = Math.max(0, Number(payload.threadMetersUsed));
+    }
 
     this.saveDatabase();
     return order;

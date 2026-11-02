@@ -58,6 +58,8 @@ export interface EmbroideryOrder {
   unitPrice: number;
   totalPrice: number;
   notes: string;
+  defectQuantity?: number;
+  threadMetersUsed?: number;
 }
 
 export interface ColorStop {

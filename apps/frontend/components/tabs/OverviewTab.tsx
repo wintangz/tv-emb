@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import type {
   DashboardMetrics,
   EmbroideryMachine,
@@ -57,6 +57,18 @@ function OverviewTab({
   onRestockAllLow,
   onAdjustStock,
 }: OverviewTabProps) {
+  const [orderPage, setOrderPage] = useState<number>(1);
+  const overviewPageSize = 3;
+  const totalOrderPages = Math.max(
+    1,
+    Math.ceil(orders.length / overviewPageSize),
+  );
+  const safeOrderPage = Math.min(Math.max(1, orderPage), totalOrderPages);
+  const pagedOverviewOrders = orders.slice(
+    (safeOrderPage - 1) * overviewPageSize,
+    safeOrderPage * overviewPageSize,
+  );
+
   return (
     <div className="space-y-6">
       {/* KPI Metric Cards */}
@@ -403,7 +415,7 @@ function OverviewTab({
           </div>
 
           <div className="space-y-3">
-            {orders.slice(0, 5).map((order) => (
+            {pagedOverviewOrders.map((order) => (
               <div
                 key={order.id}
                 className="tv-surface-2 tv-border flex flex-wrap items-center justify-between gap-4 rounded-xl border p-3.5"
@@ -473,6 +485,57 @@ function OverviewTab({
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Overview Work Orders Paging Footer */}
+          <div className="tv-border mt-4 flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs">
+            <span className="tv-text-muted">
+              {vi
+                ? `Trang ${safeOrderPage}/${totalOrderPages} • Tổng ${orders.length} lệnh sản xuất`
+                : `Page ${safeOrderPage} of ${totalOrderPages} • ${orders.length} total work orders`}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={safeOrderPage <= 1}
+                onClick={() => setOrderPage(safeOrderPage - 1)}
+                className={`tv-surface-2 tv-border rounded-lg border px-2.5 py-1 font-semibold ${
+                  safeOrderPage <= 1
+                    ? "opacity-40 cursor-not-allowed"
+                    : "hover:opacity-85 cursor-pointer"
+                }`}
+              >
+                ← {vi ? "Trước" : "Prev"}
+              </button>
+              {Array.from({ length: totalOrderPages }, (_, idx) => idx + 1).map(
+                (p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setOrderPage(p)}
+                    className={`h-6 min-w-6 rounded-md px-1.5 font-mono text-xs font-bold cursor-pointer ${
+                      p === safeOrderPage
+                        ? "tv-accent-bg"
+                        : "tv-surface-2 tv-text-muted"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ),
+              )}
+              <button
+                type="button"
+                disabled={safeOrderPage >= totalOrderPages}
+                onClick={() => setOrderPage(safeOrderPage + 1)}
+                className={`tv-surface-2 tv-border rounded-lg border px-2.5 py-1 font-semibold ${
+                  safeOrderPage >= totalOrderPages
+                    ? "opacity-40 cursor-not-allowed"
+                    : "hover:opacity-85 cursor-pointer"
+                }`}
+              >
+                {vi ? "Sau" : "Next"} →
+              </button>
+            </div>
           </div>
         </div>
 

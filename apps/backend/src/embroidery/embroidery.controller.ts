@@ -43,6 +43,11 @@ export class EmbroideryController {
     return this.embroideryService.importDatabase(body);
   }
 
+  @Get('backup')
+  exportBackup(): DashboardPayload {
+    return this.embroideryService.getDashboard();
+  }
+
   @Get('orders')
   getOrders(): EmbroideryOrder[] {
     return this.embroideryService.getOrders();

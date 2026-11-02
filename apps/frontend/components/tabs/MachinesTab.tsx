@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import type {
   EmbroideryMachine,
   EmbroideryOrder,
@@ -21,6 +21,7 @@ interface MachinesTabProps {
     patch: Partial<EmbroideryMachine>,
   ) => void;
   onLogMachineBatch: (machine: EmbroideryMachine) => void;
+  onOpenJobTicket?: (order: EmbroideryOrder) => void;
 }
 
 const MACHINE_MODES: MachineStatus[] = [
@@ -39,20 +40,30 @@ function MachinesTab({
   onOpenAddMachineModal,
   onMachineUpdate,
   onLogMachineBatch,
+  onOpenJobTicket,
 }: MachinesTabProps) {
+  const [scannerInput, setScannerInput] = useState("");
+  const scannedOrder = scannerInput.trim()
+    ? orders.find(
+        (o) =>
+          o.orderNumber.toLowerCase() === scannerInput.trim().toLowerCase() ||
+          o.orderNumber.toLowerCase().includes(scannerInput.trim().toLowerCase()),
+      )
+    : undefined;
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-bold">
             {vi
-              ? "Quản Lý Dàn Máy Thêu Vi Tính Nhiều Đầu"
-              : "Shop Floor Embroidery Machines & Multi-Head Control"}
+              ? "Quản Lý Dàn Máy Thêu Vi Tính Nhiều Đầu & Kiosk Xưởng"
+              : "Shop Floor Embroidery Machines & Multi-Head Kiosk"}
           </h2>
           <p className="text-xs tv-text-muted">
             {vi
-              ? "Chuyển trạng thái vận hành, điều chỉnh tốc độ (SPM), gán lệnh sản xuất và ghi nhận sản lượng mẻ thêu"
-              : "Toggle machine operating states, adjust stitch speed (SPM), assign work orders, and log completed batches"}
+              ? "Chuyển trạng thái vận hành, quét mã QR phiếu lệnh sản xuất, điều chỉnh tốc độ (SPM) và ghi nhận mẻ thêu"
+              : "Toggle machine operating states, scan job ticket QR/barcodes, adjust stitch speed (SPM), and log batches"}
           </p>
         </div>
         <button
@@ -61,6 +72,69 @@ function MachinesTab({
         >
           + {vi ? "Thêm Máy Thêu Mới" : "Add Embroidery Machine"}
         </button>
+      </div>
+
+      {/* Shop-Floor QR / Barcode Scanner Bar */}
+      <div className="tv-card p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 flex-1 min-w-[260px]">
+          <span className="tv-accent-bg flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-mono text-sm font-black">
+            QR
+          </span>
+          <div className="flex-1">
+            <label className="block text-[11px] font-bold uppercase tracking-wider tv-accent-text">
+              {vi
+                ? "Máy Quét Mã Vạch / QR Phiếu Lệnh Sản Xuất (USB Scanner / Kiosk)"
+                : "Shop-Floor Job Ticket Barcode / QR Scanner Lookup"}
+            </label>
+            <input
+              type="text"
+              value={scannerInput}
+              onChange={(e) => setScannerInput(e.target.value)}
+              placeholder={
+                vi
+                  ? "Quét mã QR hoặc nhập mã lệnh (VD: TV-2610-101)..."
+                  : "Scan QR or type order number (e.g., TV-2610-101)..."
+              }
+              className="tv-input mt-1 w-full px-3 py-1.5 font-mono text-xs"
+            />
+          </div>
+        </div>
+
+        {scannedOrder ? (
+          <div className="tv-surface-2 tv-border flex flex-wrap items-center gap-3 rounded-xl border px-3.5 py-2 text-xs">
+            <div>
+              <span className="font-mono font-bold tv-accent-text">
+                {scannedOrder.orderNumber}
+              </span>{" "}
+              • <span className="font-bold">{scannedOrder.companyName}</span>
+              <p className="text-[11px] tv-text-muted">
+                {scannedOrder.garmentType} ({scannedOrder.completedQuantity}/
+                {scannedOrder.quantity} {vi ? "cái" : "pcs"} •{" "}
+                {scannedOrder.stitchCount.toLocaleString()} {vi ? "mũi" : "st"})
+              </p>
+            </div>
+            {onOpenJobTicket && (
+              <button
+                onClick={() => onOpenJobTicket(scannedOrder)}
+                className="tv-accent-bg rounded-lg px-3 py-1.5 text-xs font-bold cursor-pointer"
+              >
+                🖨 {vi ? "Mở Phiếu Kỹ Thuật" : "Open Job Sheet"}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-1.5 text-xs">
+            {orders.slice(0, 3).map((o) => (
+              <button
+                key={o.id}
+                onClick={() => setScannerInput(o.orderNumber)}
+                className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1 font-mono text-[11px] tv-text-muted hover:opacity-90 cursor-pointer"
+              >
+                {o.orderNumber}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">

@@ -62,9 +62,13 @@ describe('EmbroideryService', () => {
       unitPrice: 150000,
       paymentStatus: 'PAID',
       amountPaid: 7500000,
+      defectQuantity: 2,
+      threadMetersUsed: 640,
     });
     expect(edited.totalPrice).toBe(7500000);
     expect(edited.paymentStatus).toBe('PAID');
+    expect(edited.defectQuantity).toBe(2);
+    expect(edited.threadMetersUsed).toBe(640);
 
     const updated = service.updateOrderStatus(created.id, 'COMPLETED');
     expect(updated.status).toBe('COMPLETED');

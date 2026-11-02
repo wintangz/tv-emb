@@ -1,8 +1,9 @@
 "use client";
 
-import React, { memo } from "react";
+import React, { memo, useState } from "react";
 import type { Customer } from "@/lib/types";
 import { formatVnd } from "@/lib/currency";
+import PaginationBar from "../PaginationBar";
 import type { OrderFormState } from "./studio-constants";
 
 export interface CustomersTabProps {
@@ -28,6 +29,21 @@ const CustomersTab = memo(function CustomersTab({
   onDeleteCustomer,
   onOpenNewOrderModal,
 }: CustomersTabProps) {
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(4);
+
+  const effectiveSize =
+    pageSize <= 0 ? Math.max(1, filteredCustomers.length) : pageSize;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredCustomers.length / effectiveSize),
+  );
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const pagedCustomers = filteredCustomers.slice(
+    (safePage - 1) * effectiveSize,
+    safePage * effectiveSize,
+  );
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -47,7 +63,10 @@ const CustomersTab = memo(function CustomersTab({
           <input
             type="text"
             value={customerSearch}
-            onChange={(e) => onSetCustomerSearch(e.target.value)}
+            onChange={(e) => {
+              onSetCustomerSearch(e.target.value);
+              setCurrentPage(1);
+            }}
             placeholder={
               vi
                 ? "Tìm tên công ty, khách hàng..."
@@ -65,7 +84,7 @@ const CustomersTab = memo(function CustomersTab({
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {filteredCustomers.map((cust) => {
+        {pagedCustomers.map((cust) => {
           const activeClientOrdersCount =
             ordersCountByCustomerId.get(cust.id) ?? 0;
           return (
@@ -138,6 +157,17 @@ const CustomersTab = memo(function CustomersTab({
           );
         })}
       </div>
+
+      <PaginationBar
+        vi={vi}
+        currentPage={safePage}
+        pageSize={pageSize}
+        totalItems={filteredCustomers.length}
+        pageSizeOptions={[4, 6, 10, 20]}
+        unitLabel={vi ? "khách hàng & đối tác" : "client accounts"}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+      />
     </div>
   );
 });

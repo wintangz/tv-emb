@@ -1,4 +1,8 @@
-import type { ColorStop, StitchPathSegment } from "./types";
+import type {
+  ColorStop,
+  EmbroideryDesign,
+  StitchPathSegment,
+} from "./types";
 
 export interface ParsedDstResult {
   name: string;
@@ -577,5 +581,154 @@ export function generateSampleDstBinary(
     title,
     clientName,
   };
+}
+
+/**
+ * Export any EmbroideryDesign into a machine-ready Tajima .DST binary buffer
+ * (512-byte ASCII header + 3-byte balanced-ternary stitch commands).
+ */
+export function exportDesignToDstBinary(design: EmbroideryDesign): ArrayBuffer {
+  const halfWUnits = Math.max(50, Math.round((design.widthMm * 10) / 2));
+  const halfHUnits = Math.max(50, Math.round((design.heightMm * 10) / 2));
+
+  type Cmd = {
+    dx?: number;
+    dy?: number;
+    x: number;
+    y: number;
+    type: "normal" | "jump" | "color_change";
+  };
+  const commands: Cmd[] = [];
+
+  if (design.stitchPaths && design.stitchPaths.length > 0) {
+    // Reconstruct .DST stitch coordinates from normalized [12..88] SVG path segments
+    design.stitchPaths.forEach((seg, segIdx) => {
+      if (segIdx > 0) {
+        commands.push({ x: 0, y: 0, type: "color_change" });
+      }
+      const tokens = seg.d.match(/[ML]\s*-?\d+(?:\.\d+)?\s+-?\d+(?:\.\d+)?/g) ?? [];
+      for (const token of tokens) {
+        const mode = token[0];
+        const nums = token
+          .slice(1)
+          .trim()
+          .split(/\s+/)
+          .map(Number);
+        if (nums.length >= 2 && !Number.isNaN(nums[0]) && !Number.isNaN(nums[1])) {
+          const normX = (nums[0] - 50) / 38;
+          const normY = (50 - nums[1]) / 38; // Invert SVG Y back to DST +Y
+          const x = Math.round(normX * halfWUnits);
+          const y = Math.round(normY * halfHUnits);
+          commands.push({
+            x,
+            y,
+            type: mode === "M" ? "jump" : "normal",
+          });
+        }
+      }
+    });
+  } else {
+    // Procedural stitch synthesis scaled to design.widthMm x design.heightMm & needle count
+    const needleCount = Math.max(1, design.colorSequence.length);
+    for (let n = 0; n < needleCount; n++) {
+      if (n > 0) {
+        commands.push({ x: 0, y: 0, type: "color_change" });
+      }
+      const scale = 1 - n * (0.65 / Math.max(1, needleCount));
+      const rx = Math.round(halfWUnits * scale);
+      const ry = Math.round(halfHUnits * scale);
+      const steps = 72;
+      for (let i = 0; i <= steps; i++) {
+        const angle = (i / steps) * Math.PI * 2;
+        const wave = n % 2 === 1 ? 1 + 0.12 * Math.cos(angle * 6) : 1;
+        const x = Math.round(Math.cos(angle) * rx * wave);
+        const y = Math.round(Math.sin(angle) * ry * wave);
+        commands.push({
+          x,
+          y,
+          type: i === 0 ? "jump" : "normal",
+        });
+      }
+    }
+  }
+
+  const records: Array<[number, number, number]> = [];
+  let curX = 0;
+  let curY = 0;
+  let minX = 0;
+  let maxX = 0;
+  let minY = 0;
+  let maxY = 0;
+  let colorChanges = 0;
+
+  for (const cmd of commands) {
+    if (cmd.type === "color_change") {
+      records.push(encodeDstRecord(0, 0, "color_change"));
+      colorChanges += 1;
+      continue;
+    }
+
+    let remX = cmd.x - curX;
+    let remY = cmd.y - curY;
+
+    while (Math.abs(remX) > 121 || Math.abs(remY) > 121) {
+      const stepX = Math.max(-121, Math.min(121, remX));
+      const stepY = Math.max(-121, Math.min(121, remY));
+      records.push(encodeDstRecord(stepX, stepY, "jump"));
+      curX += stepX;
+      curY += stepY;
+      remX = cmd.x - curX;
+      remY = cmd.y - curY;
+    }
+
+    records.push(encodeDstRecord(remX, remY, cmd.type));
+    curX += remX;
+    curY += remY;
+    if (curX < minX) minX = curX;
+    if (curX > maxX) maxX = curX;
+    if (curY < minY) minY = curY;
+    if (curY > maxY) maxY = curY;
+  }
+
+  records.push(encodeDstRecord(0, 0, "end"));
+
+  const cleanLabel = (design.code || design.name || "TV_EMB")
+    .replace(/[^A-Za-z0-9_-]/g, "_")
+    .toUpperCase()
+    .padEnd(16, " ")
+    .slice(0, 16);
+
+  const headerStr =
+    [
+      `LA:${cleanLabel}`,
+      `ST:${String(records.length).padStart(7, " ")}`,
+      `CO:${String(colorChanges).padStart(3, " ")}`,
+      `+X:${String(Math.round(Math.abs(maxX))).padStart(5, " ")}`,
+      `-X:${String(Math.round(Math.abs(minX))).padStart(5, " ")}`,
+      `+Y:${String(Math.round(Math.abs(maxY))).padStart(5, " ")}`,
+      `-Y:${String(Math.round(Math.abs(minY))).padStart(5, " ")}`,
+      "AX:+    0",
+      "AY:+    0",
+      "MX:+    0",
+      "MY:+    0",
+      "PD:******",
+    ].join("\r") + "\r";
+
+  const totalBytes = 512 + records.length * 3;
+  const out = new Uint8Array(totalBytes);
+  out.fill(0x20, 0, 512);
+  const encodedHeader = new TextEncoder().encode(headerStr);
+  out.set(encodedHeader.subarray(0, Math.min(511, encodedHeader.length)), 0);
+  out[511] = 0x1a;
+
+  let writeOffset = 512;
+  for (const [b0, b1, b2] of records) {
+    out[writeOffset] = b0;
+    out[writeOffset + 1] = b1;
+    out[writeOffset + 2] = b2;
+    writeOffset += 3;
+  }
+
+  return out.buffer;
 }
 
