@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import type {
   EmbroideryMachine,
   Employee,
@@ -9,6 +8,7 @@ import type {
   EmployeeShift,
   SalaryPaymentStatus,
 } from "@/lib/types";
+import { MEAL_ALLOWANCE_PER_DAY, STANDARD_HOURS_PER_DAY } from "@/lib/seed-data";
 import { formatVnd } from "@/lib/currency";
 
 export interface PayslipModalProps {
@@ -35,10 +35,19 @@ export default function PayslipModal({
   onPayFullBalance,
 }: PayslipModalProps) {
   const currentMonthStr = new Date().toISOString().slice(0, 7);
+  const otDays = +(
+    employee.overtimeHoursMonth / STANDARD_HOURS_PER_DAY
+  ).toFixed(1);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs overflow-y-auto">
-      <div className="tv-surface tv-border tv-text my-8 w-full max-w-2xl rounded-2xl border p-6 shadow-2xl">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="tv-surface tv-border tv-text my-8 w-full max-w-2xl rounded-2xl border p-6 shadow-2xl"
+      >
         {/* Top Action Bar */}
         <div className="tv-border flex flex-wrap items-center justify-between gap-3 border-b pb-4 print:hidden">
           <div className="flex items-center gap-2">
@@ -47,8 +56,8 @@ export default function PayslipModal({
             </span>
             <h3 className="text-sm font-bold">
               {vi
-                ? `Phiếu Lương & Sản Lượng Tháng — ${employee.name}`
-                : `Monthly Payroll & Stitch Output Slip — ${employee.name}`}
+                ? `Phiếu Lương Xưởng Thêu Tường Vinh — ${employee.name}`
+                : `Tuong Vinh Workshop Payslip — ${employee.name}`}
             </h3>
           </div>
 
@@ -56,25 +65,29 @@ export default function PayslipModal({
             {breakdown.balanceDue > 0 && (
               <button
                 onClick={() => onPayFullBalance(employee, breakdown.totalCost)}
-                className="rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/30 cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/20 px-3.5 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/30 cursor-pointer"
               >
-                ✓{" "}
-                {vi
-                  ? `Tất Toán Thực Lĩnh (${formatVnd(breakdown.balanceDue)})`
-                  : `Pay Remaining (${formatVnd(breakdown.balanceDue)})`}
+                <span aria-hidden="true">✓</span>
+                <span>
+                  {vi
+                    ? `Quyết Toán Thực Lĩnh (${formatVnd(breakdown.balanceDue)})`
+                    : `Settle Net Payable (${formatVnd(breakdown.balanceDue)})`}
+                </span>
               </button>
             )}
             <button
               onClick={() => window.print()}
-              className="tv-accent-bg rounded-lg px-3.5 py-1.5 text-xs font-bold cursor-pointer"
+              className="tv-accent-bg inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold cursor-pointer"
             >
-              🖨 {vi ? "In Phiếu Lương / PDF" : "Print Payslip / PDF"}
+              <span aria-hidden="true">🖨</span>
+              <span>{vi ? "In Phiếu Lương / PDF" : "Print Payslip / PDF"}</span>
             </button>
             <button
               onClick={onClose}
-              className="tv-input px-3 py-1.5 text-xs tv-text-muted cursor-pointer"
+              className="tv-input inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold tv-text-muted cursor-pointer"
             >
-              ✕ {vi ? "Đóng" : "Close"}
+              <span aria-hidden="true">✕</span>
+              <span>{vi ? "Đóng" : "Close"}</span>
             </button>
           </div>
         </div>
@@ -84,17 +97,17 @@ export default function PayslipModal({
           <div className="tv-border flex items-start justify-between border-b pb-4">
             <div>
               <p className="tv-accent-text text-[11px] font-bold uppercase tracking-widest">
-                CÔNG TY TNHH THÊU VI TÍNH TƯỜNG VINH • PHÒNG NHÂN SỰ & KẾ TOÁN
+                XƯỞNG THÊU VI TÍNH TƯỜNG VINH • CHỦ XƯỞNG
               </p>
               <h2 className="mt-1 text-xl font-black">
                 {vi
-                  ? `PHIẾU BẢNG LƯƠNG & THƯỞNG SẢN LƯỢNG (${currentMonthStr})`
-                  : `EMPLOYEE PAYROLL & STITCH BONUS STATEMENT (${currentMonthStr})`}
+                  ? `PHIẾU BẢNG LƯƠNG & PHỤ CẤP THÁNG (${currentMonthStr})`
+                  : `MONTHLY WORKSHOP PAYROLL STATEMENT (${currentMonthStr})`}
               </h2>
               <p className="tv-text-muted">
                 {vi
-                  ? "Chi tiết giờ công hành chính, tăng ca (1.5x), thưởng sản lượng mũi thêu và phụ cấp"
-                  : "Itemized regular hours, 1.5x overtime, stitch output bonus, and allowances"}
+                  ? "Ca ngày 10.5 tiếng (07:00–18:30, nghỉ trưa 1h) • Tiền cơm 35.000đ/ngày • Tăng ca Chủ Nhật ×200% • Tiền nhà trọ 500k + Chuyên cần 500k"
+                  : "10.5h daily shift (07:00–18:30, 1h lunch) • 35k/day meal • Sunday OT ×200% • 500k housing + 500k attendance"}
               </p>
             </div>
             <div className="text-right font-mono">
@@ -118,7 +131,7 @@ export default function PayslipModal({
             </div>
             <div>
               <p className="tv-text-muted">
-                {vi ? "Bộ Phận & Ca Làm" : "Role & Shift"}
+                {vi ? "Công Việc & Ca Làm" : "Role & Shift"}
               </p>
               <p className="font-bold tv-accent-text">
                 {roleLabels[employee.role]}
@@ -127,14 +140,14 @@ export default function PayslipModal({
             </div>
             <div>
               <p className="tv-text-muted">
-                {vi ? "Chuyền Máy Phụ Trách" : "Assigned Line"}
+                {vi ? "Đứng Máy (Linh Hoạt)" : "Machine Assignment"}
               </p>
               <p className="font-bold">
                 {assignedMachine
                   ? assignedMachine.name
                   : vi
-                    ? "Văn phòng / QC chung"
-                    : "General Floor / Office"}
+                    ? "Kiểm hàng QC / Phụ việc"
+                    : "QC / Errands"}
               </p>
               <p className="tv-text-muted">
                 {vi ? "Ngày vào làm:" : "Joined:"} {employee.joinedDate}
@@ -142,14 +155,14 @@ export default function PayslipModal({
             </div>
             <div>
               <p className="tv-text-muted">
-                {vi ? "Sản Lượng Mũi Tháng" : "Monthly Stitch Output"}
+                {vi ? "Ngày Công & Tăng Ca CN" : "Workdays & Sunday OT"}
               </p>
               <p className="font-mono text-sm font-bold text-emerald-400">
-                {employee.stitchesCompletedMonth.toLocaleString()}{" "}
-                {vi ? "mũi" : "st"}
+                {breakdown.daysWorked} / 26 {vi ? "ngày công" : "days"}
               </p>
               <p className="font-mono tv-text-muted">
-                {employee.hoursWorkedMonth}h + {employee.overtimeHoursMonth}h OT
+                {employee.hoursWorkedMonth}h + {employee.overtimeHoursMonth}h CN
+                ({otDays} {vi ? "ngày CN" : "Sun"})
               </p>
             </div>
           </div>
@@ -163,7 +176,7 @@ export default function PayslipModal({
                     {vi ? "Khoản Mục Thu Nhập" : "Compensation Component"}
                   </th>
                   <th className="px-4 py-2.5">
-                    {vi ? "Diễn Giải Cách Tính" : "Calculation Basis"}
+                    {vi ? "Diễn Giải Định Mức Tính Lương" : "Calculation Basis"}
                   </th>
                   <th className="px-4 py-2.5 text-right">
                     {vi ? "Thành Tiền (VNĐ)" : "Amount (VND)"}
@@ -174,29 +187,42 @@ export default function PayslipModal({
                 <tr>
                   <td className="px-4 py-2.5 font-bold">
                     {vi
-                      ? "1. Lương cơ bản / Giờ công chuẩn"
-                      : "1. Base Salary / Regular Hours"}
+                      ? "1. Lương căn bản tháng (Ca 10.5 tiếng/ngày)"
+                      : "1. Monthly Base Salary (10.5h/day shift)"}
                   </td>
                   <td className="px-4 py-2.5 font-mono tv-text-muted">
-                    {employee.payType === "Monthly"
-                      ? vi
-                        ? `Lương cứng tháng (${employee.hoursWorkedMonth} giờ công)`
-                        : `Fixed monthly salary (${employee.hoursWorkedMonth}h logged)`
-                      : `${employee.hoursWorkedMonth}h × ${formatVnd(employee.hourlyRate)}/h`}
+                    {vi
+                      ? `Mức chuẩn ${formatVnd(employee.monthlyBaseSalary)}/tháng × (${breakdown.daysWorked}/26 ngày công)`
+                      : `Base ${formatVnd(employee.monthlyBaseSalary)}/mo × (${breakdown.daysWorked}/26 days)`}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono font-bold">
                     {formatVnd(breakdown.basePay)}
                   </td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-2.5 font-bold text-sky-400">
+                  <td className="px-4 py-2.5 font-bold text-emerald-400">
                     {vi
-                      ? "2. Lương tăng ca ngoài giờ (Hệ số 1.5x)"
-                      : "2. Overtime Pay (1.5x Rate)"}
+                      ? "2. Tiền cơm trưa (35.000đ / ngày công)"
+                      : "2. Daily Meal Allowance (35,000 VND / day)"}
                   </td>
                   <td className="px-4 py-2.5 font-mono tv-text-muted">
-                    {employee.overtimeHoursMonth}{" "}
-                    {vi ? "giờ OT × 1.5x đơn giá giờ" : "OT hrs × 1.5x rate"}
+                    {breakdown.daysWorked} {vi ? "ngày công" : "days"} ×{" "}
+                    {formatVnd(MEAL_ALLOWANCE_PER_DAY)}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono font-bold text-emerald-400">
+                    +{formatVnd(breakdown.mealAllowance)}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-2.5 font-bold text-sky-400">
+                    {vi
+                      ? "3. Tăng ca Chủ Nhật (Nhân hệ số ×200%)"
+                      : "3. Sunday Overtime Pay (×200% Rate)"}
+                  </td>
+                  <td className="px-4 py-2.5 font-mono tv-text-muted">
+                    {employee.overtimeHoursMonth}h ({otDays}{" "}
+                    {vi ? "ngày CN" : "Sun"}) × 200%{" "}
+                    {vi ? "đơn giá giờ" : "hourly rate"}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono font-bold text-sky-400">
                     +{formatVnd(breakdown.overtimePay)}
@@ -205,30 +231,16 @@ export default function PayslipModal({
                 <tr>
                   <td className="px-4 py-2.5 font-bold tv-accent-text">
                     {vi
-                      ? "3. Thưởng năng suất mũi thêu"
-                      : "3. Stitch Production Bonus"}
+                      ? "4. Tiền nhà trọ (500k) + Tiền chuyên cần (500k)"
+                      : "4. Housing Allowance (500k) + Full Attendance (500k)"}
                   </td>
                   <td className="px-4 py-2.5 font-mono tv-text-muted">
-                    {employee.stitchesCompletedMonth.toLocaleString()}{" "}
-                    {vi ? "mũi" : "st"} ×{" "}
-                    {formatVnd(employee.stitchBonusPer10k)} / 10,000{" "}
-                    {vi ? "mũi" : "st"}
+                    {vi
+                      ? "Hỗ trợ tiền nhà trọ 500.000đ + thưởng chuyên cần 500.000đ/tháng"
+                      : "500k housing support + 500k full attendance bonus"}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono font-bold tv-accent-text">
-                    +{formatVnd(breakdown.stitchBonus)}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2.5 font-bold">
-                    {vi
-                      ? "4. Phụ cấp chuyên cần, cơm trưa & trách nhiệm"
-                      : "4. Shift, Meal & Attendance Allowance"}
-                  </td>
-                  <td className="px-4 py-2.5 font-mono tv-text-muted">
-                    {vi ? "Phụ cấp cố định tháng" : "Monthly standard allowance"}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono font-bold">
-                    +{formatVnd(breakdown.allowance)}
+                    +{formatVnd(breakdown.housingAndAttendance)}
                   </td>
                 </tr>
               </tbody>
@@ -250,7 +262,7 @@ export default function PayslipModal({
                 <span>
                   {vi
                     ? "Đã Tạm Ứng / Đã Chi Trả:"
-                    : "Less Advances / Paid:"}
+                    : "Less Advances / Disbursed:"}
                 </span>
                 <span>-{formatVnd(employee.amountPaidMonth)}</span>
               </div>
@@ -273,18 +285,20 @@ export default function PayslipModal({
               </p>
               <p className="text-[10px] tv-text-muted">
                 {vi
-                  ? "(Ký xác nhận đã kiểm tra giờ công & sản lượng)"
-                  : "(Verified hours & stitch output)"}
+                  ? "(Ký xác nhận đã kiểm tra ngày công, tiền cơm & tăng ca CN)"
+                  : "(Verified workdays, meal allowance & Sunday OT)"}
               </p>
             </div>
             <div className="tv-surface-2 tv-border rounded-xl border p-3.5 h-24 flex flex-col justify-between">
               <p className="font-bold uppercase text-[11px]">
                 {vi
-                  ? "Ban Giám Đốc — Thêu Vi Tính Tường Vinh"
-                  : "Approved By — Tuong Vinh Embroidery"}
+                  ? "Chủ Xưởng Duyệt Chi"
+                  : "Approved By Workshop Owner"}
               </p>
               <p className="text-[10px] tv-text-muted">
-                {vi ? "(Ký tên & đóng dấu)" : "(Authorized Signature)"}
+                {vi
+                  ? "(Xưởng Thêu Vi Tính Tường Vinh)"
+                  : "(Tuong Vinh Embroidery Workshop)"}
               </p>
             </div>
           </div>
@@ -293,4 +307,3 @@ export default function PayslipModal({
     </div>
   );
 }
-

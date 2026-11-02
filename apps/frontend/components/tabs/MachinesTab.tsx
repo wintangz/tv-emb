@@ -8,6 +8,7 @@ import type {
   MachineStatus,
 } from "@/lib/types";
 import { MACHINE_BADGE_STYLES } from "./studio-constants";
+import ModernSelect from "../ModernSelect";
 
 interface MachinesTabProps {
   vi: boolean;
@@ -43,6 +44,7 @@ function MachinesTab({
   onOpenJobTicket,
 }: MachinesTabProps) {
   const [scannerInput, setScannerInput] = useState("");
+  const [draftSpmById, setDraftSpmById] = useState<Record<string, number>>({});
   const scannedOrder = scannerInput.trim()
     ? orders.find(
         (o) =>
@@ -68,15 +70,16 @@ function MachinesTab({
         </div>
         <button
           onClick={onOpenAddMachineModal}
-          className="tv-accent-bg rounded-xl px-4 py-2 text-xs font-bold cursor-pointer"
+          className="tv-accent-bg inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-bold cursor-pointer"
         >
-          + {vi ? "Thêm Máy Thêu Mới" : "Add Embroidery Machine"}
+          <span aria-hidden="true">+</span>
+          <span>{vi ? "Thêm Máy Thêu Mới" : "Add Embroidery Machine"}</span>
         </button>
       </div>
 
       {/* Shop-Floor QR / Barcode Scanner Bar */}
       <div className="tv-card p-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 flex-1 min-w-[260px]">
+        <div className="flex items-center gap-3 flex-1 min-w-65">
           <span className="tv-accent-bg flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-mono text-sm font-black">
             QR
           </span>
@@ -116,9 +119,10 @@ function MachinesTab({
             {onOpenJobTicket && (
               <button
                 onClick={() => onOpenJobTicket(scannedOrder)}
-                className="tv-accent-bg rounded-lg px-3 py-1.5 text-xs font-bold cursor-pointer"
+                className="tv-accent-bg inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold cursor-pointer"
               >
-                🖨 {vi ? "Mở Phiếu Kỹ Thuật" : "Open Job Sheet"}
+                <span aria-hidden="true">🖨</span>
+                <span>{vi ? "Mở Phiếu Kỹ Thuật" : "Open Job Sheet"}</span>
               </button>
             )}
           </div>
@@ -128,7 +132,7 @@ function MachinesTab({
               <button
                 key={o.id}
                 onClick={() => setScannerInput(o.orderNumber)}
-                className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1 font-mono text-[11px] tv-text-muted hover:opacity-90 cursor-pointer"
+                className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1 font-mono text-[11px] font-semibold tv-text hover:opacity-90 cursor-pointer"
               >
                 {o.orderNumber}
               </button>
@@ -143,8 +147,10 @@ function MachinesTab({
           return (
             <div key={machine.id} className="tv-card p-5 space-y-4">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-bold">{machine.name}</h3>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base font-bold truncate" title={machine.name}>
+                    {machine.name}
+                  </h3>
                   <p className="text-xs tv-text-muted">
                     {machine.brand} {machine.model} • {machine.heads}{" "}
                     {vi
@@ -167,7 +173,7 @@ function MachinesTab({
                   </p>
                 </div>
                 <span
-                  className={`rounded-full border px-3 py-1 text-xs font-bold ${
+                  className={`inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-3 py-1.5 text-center text-xs font-bold leading-none ${
                     MACHINE_BADGE_STYLES[machine.status]
                   }`}
                 >
@@ -178,17 +184,17 @@ function MachinesTab({
               {/* Status Controls */}
               <div>
                 <p className="text-[11px] font-semibold uppercase tv-text-muted mb-1.5">
-                  {vi ? "Chế Độ Vận Hành Máy" : "Set Operating Mode"}
+                  {vi ? "Chuyển Trạng Thái Hoạt Động Của Máy" : "Set Machine Operating Mode"}
                 </p>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {MACHINE_MODES.map((st) => (
                     <button
                       key={st}
                       onClick={() => onMachineUpdate(machine.id, { status: st })}
-                      className={`rounded-lg py-1.5 text-xs font-bold transition cursor-pointer ${
+                      className={`inline-flex items-center justify-center text-center whitespace-nowrap rounded-lg border px-2.5 py-2 text-xs font-bold leading-none transition cursor-pointer ${
                         machine.status === st
-                          ? "tv-accent-bg"
-                          : "tv-surface-2 tv-border border tv-text-muted"
+                          ? "tv-accent-bg border-transparent"
+                          : "tv-surface-2 tv-border tv-text"
                       }`}
                     >
                       {machineLabels[st]}
@@ -203,14 +209,14 @@ function MachinesTab({
                   <label className="block text-[11px] font-semibold uppercase tv-text-muted mb-1">
                     {vi ? "Lệnh Sản Xuất Đang Gán" : "Assigned Work Order"}
                   </label>
-                  <select
+                  <ModernSelect
                     value={machine.activeOrderId ?? ""}
                     onChange={(e) =>
                       onMachineUpdate(machine.id, {
                         activeOrderId: e.target.value || null,
                       })
                     }
-                    className="tv-input w-full px-3 py-2 text-xs"
+                    className="w-full px-3 py-2 text-xs"
                   >
                     <option value="">
                       {vi
@@ -224,38 +230,93 @@ function MachinesTab({
                         {vi ? "cái" : "pcs"})
                       </option>
                     ))}
-                  </select>
+                  </ModernSelect>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold uppercase tv-text-muted mb-1">
-                    {vi ? "Tốc Độ Máy:" : "Stitch Speed:"} {machine.currentSpm}{" "}
-                    SPM ({vi ? "Tối đa" : "Max"} {machine.maxSpm})
-                  </label>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <label className="block text-[11px] font-semibold uppercase tv-text-muted">
+                      {vi ? "Tốc Độ Máy:" : "Stitch Speed:"}{" "}
+                      <span className="font-mono font-bold tv-accent-text">
+                        {draftSpmById[machine.id] ?? machine.currentSpm} SPM
+                      </span>{" "}
+                      ({vi ? "Tối đa" : "Max"} {machine.maxSpm})
+                    </label>
+                    {(draftSpmById[machine.id] ?? machine.currentSpm) !==
+                      machine.currentSpm && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const targetSpm =
+                            draftSpmById[machine.id] ?? machine.currentSpm;
+                          onMachineUpdate(machine.id, {
+                            currentSpm: targetSpm,
+                          });
+                          setDraftSpmById((prev) => {
+                            const next = { ...prev };
+                            delete next[machine.id];
+                            return next;
+                          });
+                        }}
+                        className="tv-accent-bg inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-extrabold cursor-pointer"
+                      >
+                        <span aria-hidden="true">✓</span>
+                        <span>{vi ? "Áp Dụng" : "Apply"}</span>
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="range"
                     min={0}
                     max={machine.maxSpm}
                     step={50}
-                    value={machine.currentSpm}
+                    value={draftSpmById[machine.id] ?? machine.currentSpm}
                     onChange={(e) =>
-                      onMachineUpdate(machine.id, {
-                        currentSpm: Number(e.target.value),
-                      })
+                      setDraftSpmById((prev) => ({
+                        ...prev,
+                        [machine.id]: Number(e.target.value),
+                      }))
                     }
                     className="w-full cursor-pointer"
                     style={{ accentColor: "var(--tv-accent)" }}
                   />
+                  <div className="mt-1 flex items-center justify-between gap-1">
+                    {[0, 750, 900, machine.maxSpm].map((spmPreset) => (
+                      <button
+                        key={spmPreset}
+                        type="button"
+                        onClick={() => {
+                          setDraftSpmById((prev) => {
+                            const next = { ...prev };
+                            delete next[machine.id];
+                            return next;
+                          });
+                          if (spmPreset !== machine.currentSpm) {
+                            onMachineUpdate(machine.id, {
+                              currentSpm: spmPreset,
+                            });
+                          }
+                        }}
+                        className={`rounded border px-2 py-0.5 font-mono text-[10px] font-semibold transition cursor-pointer ${
+                          machine.currentSpm === spmPreset
+                            ? "tv-accent-bg border-transparent font-bold"
+                            : "tv-surface-2 tv-border tv-text-muted hover:text-(--tv-text)"
+                        }`}
+                      >
+                        {spmPreset} SPM
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               {/* Telemetry Footer */}
-              <div className="tv-surface-2 grid grid-cols-3 gap-2 rounded-lg p-3 text-center text-xs">
+              <div className="tv-surface-2 tv-border grid grid-cols-3 gap-2 rounded-lg border p-3 text-center text-xs">
                 <div>
                   <p className="tv-text-muted">
                     {vi ? "Số Mũi Hôm Nay" : "Stitches Today"}
                   </p>
-                  <p className="font-mono font-bold">
+                  <p className="mt-1 font-mono font-bold">
                     {machine.totalStitchesToday.toLocaleString()}
                   </p>
                 </div>
@@ -263,7 +324,7 @@ function MachinesTab({
                   <p className="tv-text-muted">
                     {vi ? "Lần Đứt Chỉ" : "Thread Breaks"}
                   </p>
-                  <div className="flex items-center justify-center gap-1.5">
+                  <div className="mt-1 flex items-center justify-center gap-1.5">
                     <span className="font-mono font-bold text-rose-400">
                       {machine.threadBreaksToday}
                     </span>
@@ -273,9 +334,14 @@ function MachinesTab({
                           threadBreaksToday: machine.threadBreaksToday + 1,
                         })
                       }
-                      className="tv-surface tv-border rounded border px-1.5 text-[10px] cursor-pointer"
+                      title={
+                        vi
+                          ? "Báo máy vừa bị đứt chỉ (+1 lần)"
+                          : "Log +1 thread break event on this machine"
+                      }
+                      className="tv-surface tv-border inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[10px] font-bold tv-text cursor-pointer"
                     >
-                      +1
+                      +1 {vi ? "Đứt Chỉ" : "Break"}
                     </button>
                   </div>
                 </div>
@@ -283,15 +349,20 @@ function MachinesTab({
                   <p className="tv-text-muted">
                     {vi ? "Tiến Độ Mẻ" : "Run Progress"}
                   </p>
-                  <div className="flex items-center justify-center gap-1.5">
+                  <div className="mt-1 flex items-center justify-center gap-1.5">
                     <span className="font-mono font-bold text-emerald-400">
                       {machine.progressPercent}%
                     </span>
                     <button
                       onClick={() => onLogMachineBatch(machine)}
-                      className="rounded bg-emerald-500/20 border border-emerald-500/40 px-2 text-[10px] font-bold text-emerald-400 cursor-pointer"
+                      title={
+                        vi
+                          ? `Nghiệm thu hoàn thành 1 mẻ thêu (+${machine.heads * 2} sản phẩm)`
+                          : `Log 1 completed machine batch run (+${machine.heads * 2} garments)`
+                      }
+                      className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/20 border border-emerald-500/45 px-2.5 py-1 text-[10px] font-bold text-emerald-400 cursor-pointer"
                     >
-                      +{machine.heads * 2} {vi ? "cái" : "pcs"}
+                      +{machine.heads * 2} {vi ? "SP Nghiệm Thu" : "Batch Output"}
                     </button>
                   </div>
                 </div>
@@ -305,4 +376,3 @@ function MachinesTab({
 }
 
 export default React.memo(MachinesTab);
-

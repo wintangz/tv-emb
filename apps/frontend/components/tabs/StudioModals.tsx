@@ -1,11 +1,10 @@
 "use client";
 
-import React, { memo } from "react";
+import React, { memo, useEffect } from "react";
 import type {
   Customer,
   EmbroideryDesign,
   EmbroideryMachine,
-  EmployeePayType,
   EmployeeRole,
   EmployeeShift,
   EmployeeStatus,
@@ -15,6 +14,7 @@ import type {
 } from "@/lib/types";
 import { parseDstBuffer } from "@/lib/dst-parser";
 import DesignHoopPreview from "../DesignHoopPreview";
+import ModernSelect from "../ModernSelect";
 import {
   EMPLOYEE_ROLES,
   PLACEMENTS,
@@ -44,7 +44,7 @@ export interface StudioModalsProps {
   orderForm: OrderFormState;
   onSetOrderForm: (next: OrderFormState) => void;
   onCloseOrderModal: () => void;
-  onSaveOrder: (e: React.FormEvent) => void;
+  onSaveOrder: (e: React.SyntheticEvent) => void;
 
   // Design Modal
   showDesignModal: boolean;
@@ -52,14 +52,14 @@ export interface StudioModalsProps {
   designForm: DesignFormState;
   onSetDesignForm: (next: DesignFormState) => void;
   onCloseDesignModal: () => void;
-  onSaveDesign: (e: React.FormEvent) => void;
+  onSaveDesign: (e: React.SyntheticEvent) => void;
 
   // Machine Modal
   showMachineModal: boolean;
   machineForm: MachineFormState;
   onSetMachineForm: (next: MachineFormState) => void;
   onCloseMachineModal: () => void;
-  onCreateMachine: (e: React.FormEvent) => void;
+  onCreateMachine: (e: React.SyntheticEvent) => void;
 
   // Inventory Modal
   showInventoryModal: boolean;
@@ -67,7 +67,7 @@ export interface StudioModalsProps {
   inventoryForm: InventoryFormState;
   onSetInventoryForm: (next: InventoryFormState) => void;
   onCloseInventoryModal: () => void;
-  onSaveInventory: (e: React.FormEvent) => void;
+  onSaveInventory: (e: React.SyntheticEvent) => void;
 
   // Customer Modal
   showCustomerModal: boolean;
@@ -75,7 +75,7 @@ export interface StudioModalsProps {
   customerForm: CustomerFormState;
   onSetCustomerForm: (next: CustomerFormState) => void;
   onCloseCustomerModal: () => void;
-  onSaveCustomer: (e: React.FormEvent) => void;
+  onSaveCustomer: (e: React.SyntheticEvent) => void;
 
   // Employee Modal
   showEmployeeModal: boolean;
@@ -83,7 +83,7 @@ export interface StudioModalsProps {
   employeeForm: EmployeeFormState;
   onSetEmployeeForm: (next: EmployeeFormState) => void;
   onCloseEmployeeModal: () => void;
-  onSaveEmployee: (e: React.FormEvent) => void;
+  onSaveEmployee: (e: React.SyntheticEvent) => void;
 }
 
 const StudioModals = memo(function StudioModals({
@@ -133,12 +133,55 @@ const StudioModals = memo(function StudioModals({
   onCloseEmployeeModal,
   onSaveEmployee,
 }: StudioModalsProps) {
+  useEffect(() => {
+    const anyOpen =
+      showOrderModal ||
+      showDesignModal ||
+      showMachineModal ||
+      showInventoryModal ||
+      showCustomerModal ||
+      showEmployeeModal;
+    if (!anyOpen) return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (showOrderModal) onCloseOrderModal();
+        if (showDesignModal) onCloseDesignModal();
+        if (showMachineModal) onCloseMachineModal();
+        if (showInventoryModal) onCloseInventoryModal();
+        if (showCustomerModal) onCloseCustomerModal();
+        if (showEmployeeModal) onCloseEmployeeModal();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    showOrderModal,
+    showDesignModal,
+    showMachineModal,
+    showInventoryModal,
+    showCustomerModal,
+    showEmployeeModal,
+    onCloseOrderModal,
+    onCloseDesignModal,
+    onCloseMachineModal,
+    onCloseInventoryModal,
+    onCloseCustomerModal,
+    onCloseEmployeeModal,
+  ]);
+
   return (
     <>
       {/* ================= MODAL: CREATE / EDIT WORK ORDER ================= */}
       {showOrderModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs overflow-y-auto">
-          <div className="tv-surface tv-border tv-text my-8 w-full max-w-xl rounded-2xl border p-6 shadow-2xl">
+        <div
+          onClick={onCloseOrderModal}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="tv-surface tv-border tv-text my-8 w-full max-w-xl rounded-2xl border p-6 shadow-2xl"
+          >
             <div className="tv-border flex items-center justify-between border-b pb-3">
               <h3 className="text-base font-bold">
                 {editingOrderId
@@ -163,7 +206,7 @@ const StudioModals = memo(function StudioModals({
                   <label className="block tv-text-muted mb-1">
                     {vi ? "Khách Hàng / Đối Tác" : "Client Account"}
                   </label>
-                  <select
+                  <ModernSelect
                     value={orderForm.customerId}
                     onChange={(e) =>
                       onSetOrderForm({
@@ -171,21 +214,21 @@ const StudioModals = memo(function StudioModals({
                         customerId: e.target.value,
                       })
                     }
-                    className="tv-input w-full px-3 py-2"
+                    className="w-full px-3 py-2"
                   >
                     {customers.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.company} ({c.name})
                       </option>
                     ))}
-                  </select>
+                  </ModernSelect>
                 </div>
 
                 <div>
                   <label className="block tv-text-muted mb-1">
                     {vi ? "Mẫu Thêu Vi Tính" : "Digitized Design"}
                   </label>
-                  <select
+                  <ModernSelect
                     value={orderForm.designId}
                     onChange={(e) =>
                       onSetOrderForm({
@@ -193,7 +236,7 @@ const StudioModals = memo(function StudioModals({
                         designId: e.target.value,
                       })
                     }
-                    className="tv-input w-full px-3 py-2"
+                    className="w-full px-3 py-2"
                   >
                     {designs.map((d) => (
                       <option key={d.id} value={d.id}>
@@ -201,7 +244,7 @@ const StudioModals = memo(function StudioModals({
                         {vi ? "mũi" : "st"})
                       </option>
                     ))}
-                  </select>
+                  </ModernSelect>
                 </div>
               </div>
 
@@ -247,7 +290,7 @@ const StudioModals = memo(function StudioModals({
                   <label className="block tv-text-muted mb-1">
                     {vi ? "Vị Trí Thêu" : "Placement"}
                   </label>
-                  <select
+                  <ModernSelect
                     value={orderForm.placement}
                     onChange={(e) =>
                       onSetOrderForm({
@@ -255,14 +298,14 @@ const StudioModals = memo(function StudioModals({
                         placement: e.target.value as GarmentPlacement,
                       })
                     }
-                    className="tv-input w-full px-3 py-2"
+                    className="w-full px-3 py-2"
                   >
                     {PLACEMENTS.map((p) => (
                       <option key={p} value={p}>
                         {PLACEMENT_LABELS[p]}
                       </option>
                     ))}
-                  </select>
+                  </ModernSelect>
                 </div>
 
                 <div>
@@ -363,7 +406,7 @@ const StudioModals = memo(function StudioModals({
                   <label className="block tv-text-muted mb-1">
                     {vi ? "Trạng Thái Thanh Toán" : "Payment Status"}
                   </label>
-                  <select
+                  <ModernSelect
                     value={orderForm.paymentStatus}
                     onChange={(e) =>
                       onSetOrderForm({
@@ -371,21 +414,21 @@ const StudioModals = memo(function StudioModals({
                         paymentStatus: e.target.value as PaymentStatus,
                       })
                     }
-                    className="tv-input w-full px-3 py-2"
+                    className="w-full px-3 py-2"
                   >
                     <option value="UNPAID">{PAYMENT_LABELS.UNPAID}</option>
                     <option value="DEPOSIT_PAID">
                       {PAYMENT_LABELS.DEPOSIT_PAID}
                     </option>
                     <option value="PAID">{PAYMENT_LABELS.PAID}</option>
-                  </select>
+                  </ModernSelect>
                 </div>
 
                 <div>
                   <label className="block tv-text-muted mb-1">
                     {vi ? "Phân Công Máy Thêu" : "Assigned Machine"}
                   </label>
-                  <select
+                  <ModernSelect
                     value={orderForm.assignedMachineId}
                     onChange={(e) =>
                       onSetOrderForm({
@@ -393,7 +436,7 @@ const StudioModals = memo(function StudioModals({
                         assignedMachineId: e.target.value,
                       })
                     }
-                    className="tv-input w-full px-3 py-2"
+                    className="w-full px-3 py-2"
                   >
                     <option value="">
                       {vi ? "— Chưa gán máy —" : "— Unassigned —"}
@@ -403,7 +446,7 @@ const StudioModals = memo(function StudioModals({
                         {m.name}
                       </option>
                     ))}
-                  </select>
+                  </ModernSelect>
                 </div>
               </div>
 
@@ -424,7 +467,22 @@ const StudioModals = memo(function StudioModals({
                     className="tv-input w-full px-3 py-2"
                   />
                 </div>
-                <div className="flex items-end pb-2">
+                <div className="flex flex-col justify-end gap-1.5 pb-1">
+                  <label className="flex items-center gap-2 text-amber-400 font-semibold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(orderForm.is3DPuff)}
+                      onChange={(e) =>
+                        onSetOrderForm({
+                          ...orderForm,
+                          is3DPuff: e.target.checked,
+                        })
+                      }
+                    />
+                    {vi
+                      ? "Hàng Thêu Nổi 3D (Mua Mút EVA / Mouse)"
+                      : "3D Puff Embroidery (EVA Foam Norm)"}
+                  </label>
                   <label className="flex items-center gap-2 text-rose-400 cursor-pointer">
                     <input
                       type="checkbox"
@@ -440,6 +498,62 @@ const StudioModals = memo(function StudioModals({
                       ? "Đánh dấu Đơn Hàng Gấp Ưu Tiên"
                       : "Mark as Priority Rush Order"}
                   </label>
+                </div>
+              </div>
+
+              <div className="tv-surface-2 tv-border grid grid-cols-1 gap-3 rounded-xl border p-3 sm:grid-cols-2">
+                <div>
+                  <label className="block tv-text-muted mb-1">
+                    {vi
+                      ? "Phương Thức Vận Chuyển Giao Nhận"
+                      : "External Vehicle Transport Rule"}
+                  </label>
+                  <ModernSelect
+                    value={orderForm.shippingMode ?? "LOCAL_2_WAY"}
+                    onChange={(e) => {
+                      const nextMode = e.target.value as
+                        | "LOCAL_2_WAY"
+                        | "CHANH_XE_PICKUP";
+                      onSetOrderForm({
+                        ...orderForm,
+                        shippingMode: nextMode,
+                        shippingCost:
+                          nextMode === "CHANH_XE_PICKUP" ? 150000 : 300000,
+                      });
+                    }}
+                    className="w-full px-2.5 py-2"
+                  >
+                    <option value="LOCAL_2_WAY">
+                      {vi
+                        ? "Khách nội thành — Chịu phí xe vận chuyển 2 chiều"
+                        : "Local — Workshop pays 2-way vehicle"}
+                    </option>
+                    <option value="CHANH_XE_PICKUP">
+                      {vi
+                        ? "Khách tỉnh — Chỉ chịu 1 chiều Chành xe về xưởng"
+                        : "Provincial — Only 1-way Chành Xe pickup"}
+                    </option>
+                  </ModernSelect>
+                </div>
+                <div>
+                  <label className="block tv-text-muted mb-1">
+                    {vi
+                      ? "Chi Phí Vận Chuyển Xưởng Chịu (₫)"
+                      : "Transport Cost Paid by Shop (VND)"}
+                  </label>
+                  <input
+                    type="number"
+                    step="10000"
+                    min={0}
+                    value={orderForm.shippingCost ?? 300000}
+                    onChange={(e) =>
+                      onSetOrderForm({
+                        ...orderForm,
+                        shippingCost: Math.max(0, Number(e.target.value)),
+                      })
+                    }
+                    className="tv-input w-full px-3 py-2 font-mono"
+                  />
                 </div>
               </div>
 
@@ -492,17 +606,32 @@ const StudioModals = memo(function StudioModals({
 
       {/* ================= MODAL: CREATE / EDIT DESIGN ================= */}
       {showDesignModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs overflow-y-auto">
-          <div className="tv-surface tv-border tv-text my-8 w-full max-w-lg rounded-2xl border p-6 shadow-2xl">
-            <h3 className="text-base font-bold mb-3">
-              {editingDesignId
-                ? vi
-                  ? "Chỉnh Sửa Mẫu Thêu & Thứ Tự Kim Chỉ"
-                  : "Edit Digitized Design & Needle Sequence"
-                : vi
-                  ? "Thêm Mẫu Thêu Vi Tính Mới"
-                  : "Add Digitized Embroidery Design"}
-            </h3>
+        <div
+          onClick={onCloseDesignModal}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="tv-surface tv-border tv-text my-8 w-full max-w-lg rounded-2xl border p-6 shadow-2xl"
+          >
+            <div className="tv-border mb-3 flex items-center justify-between border-b pb-3">
+              <h3 className="text-base font-bold">
+                {editingDesignId
+                  ? vi
+                    ? "Chỉnh Sửa Mẫu Thêu & Thứ Tự Kim Chỉ"
+                    : "Edit Digitized Design & Needle Sequence"
+                  : vi
+                    ? "Thêm Mẫu Thêu Vi Tính Mới"
+                    : "Add Digitized Embroidery Design"}
+              </h3>
+              <button
+                type="button"
+                onClick={onCloseDesignModal}
+                className="text-xs tv-text-muted cursor-pointer"
+              >
+                ✕ {vi ? "Đóng" : "Close"}
+              </button>
+            </div>
 
             {/* Live Hoop Preview + .DST Upload Bar */}
             <div className="tv-surface-2 tv-border mb-4 flex items-center gap-3 rounded-xl border p-3">
@@ -797,13 +926,83 @@ const StudioModals = memo(function StudioModals({
 
       {/* ================= MODAL: ADD MACHINE ================= */}
       {showMachineModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs">
-          <div className="tv-surface tv-border tv-text w-full max-w-md rounded-2xl border p-6 shadow-2xl">
-            <h3 className="text-base font-bold mb-4">
-              {vi
-                ? "Thêm Máy Thêu Công Nghiệp Mới"
-                : "Add Embroidery Machine Line"}
-            </h3>
+        <div
+          onClick={onCloseMachineModal}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="tv-surface tv-border tv-text w-full max-w-md rounded-2xl border p-6 shadow-2xl"
+          >
+            <div className="tv-border mb-3 flex items-center justify-between border-b pb-3">
+              <h3 className="text-base font-bold">
+                {vi
+                  ? "Thêm Máy Thêu Công Nghiệp Mới"
+                  : "Add Embroidery Machine Line"}
+              </h3>
+              <button
+                type="button"
+                onClick={onCloseMachineModal}
+                className="text-xs tv-text-muted cursor-pointer"
+              >
+                ✕ {vi ? "Đóng" : "Close"}
+              </button>
+            </div>
+            <div className="mb-3">
+              <p className="text-[11px] font-semibold tv-text-muted mb-1.5">
+                {vi
+                  ? "Chọn nhanh 2 dòng máy đang dùng tại xưởng:"
+                  : "Quick-select factory machine model:"}
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onSetMachineForm({
+                      ...machineForm,
+                      brand: "Tajima",
+                      model: "TFGN2",
+                      heads: 20,
+                      needlesPerHead: 9,
+                      maxSpm: 1000,
+                    })
+                  }
+                  className={`rounded-lg border px-3 py-2 text-left transition cursor-pointer ${
+                    machineForm.model === "TFGN2"
+                      ? "tv-accent-bg border-transparent font-bold"
+                      : "tv-surface-2 tv-border tv-text"
+                  }`}
+                >
+                  <div>Tajima TFGN2</div>
+                  <div className="text-[10px] opacity-80">
+                    20 {vi ? "đầu" : "heads"} • 9 {vi ? "kim" : "needles"} • 1000 SPM
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onSetMachineForm({
+                      ...machineForm,
+                      brand: "Tajima",
+                      model: "TMCP",
+                      heads: 20,
+                      needlesPerHead: 9,
+                      maxSpm: 1000,
+                    })
+                  }
+                  className={`rounded-lg border px-3 py-2 text-left transition cursor-pointer ${
+                    machineForm.model === "TMCP"
+                      ? "tv-accent-bg border-transparent font-bold"
+                      : "tv-surface-2 tv-border tv-text"
+                  }`}
+                >
+                  <div>Tajima TMCP</div>
+                  <div className="text-[10px] opacity-80">
+                    20 {vi ? "đầu" : "heads"} • 9 {vi ? "kim" : "needles"} • 1000 SPM
+                  </div>
+                </button>
+              </div>
+            </div>
             <form onSubmit={onCreateMachine} className="space-y-3 text-xs">
               <div>
                 <label className="block tv-text-muted mb-1">
@@ -824,7 +1023,7 @@ const StudioModals = memo(function StudioModals({
                   <label className="block tv-text-muted mb-1">
                     {vi ? "Hãng Máy" : "Brand"}
                   </label>
-                  <select
+                  <ModernSelect
                     value={machineForm.brand}
                     onChange={(e) =>
                       onSetMachineForm({
@@ -832,14 +1031,14 @@ const StudioModals = memo(function StudioModals({
                         brand: e.target.value as typeof machineForm.brand,
                       })
                     }
-                    className="tv-input w-full px-3 py-2"
+                    className="w-full px-3 py-2"
                   >
                     <option value="Tajima">Tajima</option>
                     <option value="Barudan">Barudan</option>
                     <option value="Ricoma">Ricoma</option>
                     <option value="Brother">Brother</option>
                     <option value="HappyJapan">HappyJapan</option>
-                  </select>
+                  </ModernSelect>
                 </div>
                 <div>
                   <label className="block tv-text-muted mb-1">
@@ -934,17 +1133,32 @@ const StudioModals = memo(function StudioModals({
 
       {/* ================= MODAL: CREATE / EDIT INVENTORY ================= */}
       {showInventoryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs">
-          <div className="tv-surface tv-border tv-text w-full max-w-md rounded-2xl border p-6 shadow-2xl">
-            <h3 className="text-base font-bold mb-4">
-              {editingInventoryId
-                ? vi
-                  ? "Chỉnh Sửa Mã Chỉ / Vật Tư Phụ Liệu"
-                  : "Edit Thread / Supply Item"
-                : vi
-                  ? "Thêm Cuộn Chỉ Thêu Hoặc Keo Lót"
-                  : "Add Thread Cone or Backing Supply"}
-            </h3>
+        <div
+          onClick={onCloseInventoryModal}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="tv-surface tv-border tv-text w-full max-w-md rounded-2xl border p-6 shadow-2xl"
+          >
+            <div className="tv-border mb-4 flex items-center justify-between border-b pb-3">
+              <h3 className="text-base font-bold">
+                {editingInventoryId
+                  ? vi
+                    ? "Chỉnh Sửa Mã Chỉ / Vật Tư Phụ Liệu"
+                    : "Edit Thread / Supply Item"
+                  : vi
+                    ? "Thêm Cuộn Chỉ Thêu Hoặc Keo Lót"
+                    : "Add Thread Cone or Backing Supply"}
+              </h3>
+              <button
+                type="button"
+                onClick={onCloseInventoryModal}
+                className="text-xs tv-text-muted cursor-pointer"
+              >
+                ✕ {vi ? "Đóng" : "Close"}
+              </button>
+            </div>
             <form onSubmit={onSaveInventory} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -1071,17 +1285,32 @@ const StudioModals = memo(function StudioModals({
 
       {/* ================= MODAL: CREATE / EDIT CUSTOMER ================= */}
       {showCustomerModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs">
-          <div className="tv-surface tv-border tv-text w-full max-w-md rounded-2xl border p-6 shadow-2xl">
-            <h3 className="text-base font-bold mb-4">
-              {editingCustomerId
-                ? vi
-                  ? "Chỉnh Sửa Thông Tin Khách Hàng"
-                  : "Edit Client Account"
-                : vi
-                  ? "Thêm Khách Hàng / Đối Tác Mới"
-                  : "Add Client Account"}
-            </h3>
+        <div
+          onClick={onCloseCustomerModal}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="tv-surface tv-border tv-text w-full max-w-md rounded-2xl border p-6 shadow-2xl"
+          >
+            <div className="tv-border mb-4 flex items-center justify-between border-b pb-3">
+              <h3 className="text-base font-bold">
+                {editingCustomerId
+                  ? vi
+                    ? "Chỉnh Sửa Thông Tin Khách Hàng"
+                    : "Edit Client Account"
+                  : vi
+                    ? "Thêm Khách Hàng / Đối Tác Mới"
+                    : "Add Client Account"}
+              </h3>
+              <button
+                type="button"
+                onClick={onCloseCustomerModal}
+                className="text-xs tv-text-muted cursor-pointer"
+              >
+                ✕ {vi ? "Đóng" : "Close"}
+              </button>
+            </div>
             <form onSubmit={onSaveCustomer} className="space-y-3 text-xs">
               <div>
                 <label className="block tv-text-muted mb-1">
@@ -1210,18 +1439,31 @@ const StudioModals = memo(function StudioModals({
 
       {/* ================= MODAL: CREATE / EDIT EMPLOYEE & PAYROLL ================= */}
       {showEmployeeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs overflow-y-auto">
-          <div className="tv-surface tv-border tv-text my-8 w-full max-w-xl rounded-2xl border p-6 shadow-2xl">
+        <div
+          onClick={onCloseEmployeeModal}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="tv-surface tv-border tv-text my-8 w-full max-w-xl rounded-2xl border p-6 shadow-2xl"
+          >
             <div className="tv-border flex items-center justify-between border-b pb-3">
-              <h3 className="text-base font-bold">
-                {editingEmployeeId
-                  ? vi
-                    ? "Chỉnh Sửa Nhân Sự & Mức Lương Xưởng Thêu"
-                    : "Edit Staff Member & Payroll Structure"
-                  : vi
-                    ? "Thêm Nhân Sự & Cấu Hình Tiền Lương Mới"
-                    : "Add Shop Staff Member & Pay Structure"}
-              </h3>
+              <div>
+                <h3 className="text-base font-bold">
+                  {editingEmployeeId
+                    ? vi
+                      ? "Chỉnh Sửa Hồ Sơ Nhân Sự & Định Mức Lương"
+                      : "Edit Workshop Staff & Payroll Structure"
+                    : vi
+                      ? "Thêm Thợ Đứng Máy / Kiểm Hàng QC / Giao Nhận"
+                      : "Add Workshop Operator / QC / Logistics Staff"}
+                </h3>
+                <p className="text-[11px] tv-text-muted">
+                  {vi
+                    ? "Ca 10.5h/ngày (07:00–18:30, nghỉ trưa 1h) • Tiền cơm 35k/ngày tự động cộng • Tăng ca CN ×200% • Trọ 500k + Chuyên cần 500k"
+                    : "10.5h/day shift (07:00–18:30, 1h lunch) • Auto +35k/day meal • Sunday OT ×200% • 500k housing + 500k attendance"}
+                </p>
+              </div>
               <button
                 onClick={onCloseEmployeeModal}
                 className="text-xs tv-text-muted cursor-pointer"
@@ -1230,9 +1472,99 @@ const StudioModals = memo(function StudioModals({
               </button>
             </div>
 
+            {/* Quick Role Salary Preset Buttons */}
+            <div className="mt-3">
+              <p className="text-[11px] font-semibold tv-text-muted mb-1.5">
+                {vi
+                  ? "Chọn nhanh mức lương chuẩn theo vị trí công việc:"
+                  : "Quick-select standard workshop salary preset:"}
+              </p>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onSetEmployeeForm({
+                      ...employeeForm,
+                      role: "Machine Operator",
+                      shift: "Full-Day",
+                      payType: "Monthly",
+                      monthlyBaseSalary: 9000000,
+                      hourlyRate: 32967,
+                      hoursWorkedMonth: 273,
+                      allowanceAndBonus: 1000000,
+                    })
+                  }
+                  className={`rounded-lg border px-2.5 py-2 text-left transition cursor-pointer ${
+                    employeeForm.role === "Machine Operator"
+                      ? "tv-accent-bg border-transparent font-bold"
+                      : "tv-surface-2 tv-border tv-text"
+                  }`}
+                >
+                  <div>{vi ? "Thợ Đứng Máy" : "Machine Operator"}</div>
+                  <div className="font-mono text-[10px] opacity-85">
+                    9.000.000 ₫ / {vi ? "tháng" : "mo"}
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    onSetEmployeeForm({
+                      ...employeeForm,
+                      role: "Trimming & QC",
+                      shift: "Full-Day",
+                      payType: "Monthly",
+                      monthlyBaseSalary: 8500000,
+                      hourlyRate: 31136,
+                      hoursWorkedMonth: 273,
+                      assignedMachineId: "",
+                      allowanceAndBonus: 1000000,
+                    })
+                  }
+                  className={`rounded-lg border px-2.5 py-2 text-left transition cursor-pointer ${
+                    employeeForm.role === "Trimming & QC"
+                      ? "tv-accent-bg border-transparent font-bold"
+                      : "tv-surface-2 tv-border tv-text"
+                  }`}
+                >
+                  <div>{vi ? "Kiểm Hàng (QC)" : "QC Inspector"}</div>
+                  <div className="font-mono text-[10px] opacity-85">
+                    8tr – 8.500.000 ₫ / {vi ? "tháng" : "mo"}
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    onSetEmployeeForm({
+                      ...employeeForm,
+                      role: "Errands & Delivery",
+                      shift: "Full-Day",
+                      payType: "Monthly",
+                      monthlyBaseSalary: 7500000,
+                      hourlyRate: 27473,
+                      hoursWorkedMonth: 273,
+                      assignedMachineId: "",
+                      allowanceAndBonus: 1000000,
+                    })
+                  }
+                  className={`rounded-lg border px-2.5 py-2 text-left transition cursor-pointer ${
+                    employeeForm.role === "Errands & Delivery"
+                      ? "tv-accent-bg border-transparent font-bold"
+                      : "tv-surface-2 tv-border tv-text"
+                  }`}
+                >
+                  <div>{vi ? "Giao Nhận & Hỗ Trợ Xưởng" : "Logistics & Workshop Support"}</div>
+                  <div className="font-mono text-[10px] opacity-85">
+                    7.500.000 ₫ / {vi ? "tháng" : "mo"}
+                  </div>
+                </button>
+              </div>
+            </div>
+
             <form
               onSubmit={onSaveEmployee}
-              className="mt-4 space-y-3.5 text-xs"
+              className="mt-3.5 space-y-3.5 text-xs"
             >
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1277,9 +1609,9 @@ const StudioModals = memo(function StudioModals({
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block tv-text-muted mb-1">
-                    {vi ? "Bộ Phận / Vai Trò" : "Shop Role"}
+                    {vi ? "Công Việc Tại Xưởng" : "Workshop Role"}
                   </label>
-                  <select
+                  <ModernSelect
                     value={employeeForm.role}
                     onChange={(e) =>
                       onSetEmployeeForm({
@@ -1287,21 +1619,21 @@ const StudioModals = memo(function StudioModals({
                         role: e.target.value as EmployeeRole,
                       })
                     }
-                    className="tv-input w-full px-3 py-2"
+                    className="w-full px-3 py-2"
                   >
                     {EMPLOYEE_ROLES.map((r) => (
                       <option key={r} value={r}>
                         {EMPLOYEE_ROLE_LABELS[r]}
                       </option>
                     ))}
-                  </select>
+                  </ModernSelect>
                 </div>
 
                 <div>
                   <label className="block tv-text-muted mb-1">
-                    {vi ? "Ca Làm Việc" : "Work Shift"}
+                    {vi ? "Ca Làm (10.5 tiếng/ngày)" : "Work Shift (10.5h/day)"}
                   </label>
-                  <select
+                  <ModernSelect
                     value={employeeForm.shift}
                     onChange={(e) =>
                       onSetEmployeeForm({
@@ -1309,23 +1641,23 @@ const StudioModals = memo(function StudioModals({
                         shift: e.target.value as EmployeeShift,
                       })
                     }
-                    className="tv-input w-full px-3 py-2"
+                    className="w-full px-3 py-2"
                   >
                     {(
-                      ["Morning", "Afternoon", "Full-Day"] as EmployeeShift[]
+                      ["Full-Day", "Morning", "Afternoon"] as EmployeeShift[]
                     ).map((s) => (
                       <option key={s} value={s}>
                         {EMPLOYEE_SHIFT_LABELS[s]}
                       </option>
                     ))}
-                  </select>
+                  </ModernSelect>
                 </div>
 
                 <div>
                   <label className="block tv-text-muted mb-1">
                     {vi ? "Trạng Thái Làm Việc" : "Employment Status"}
                   </label>
-                  <select
+                  <ModernSelect
                     value={employeeForm.status}
                     onChange={(e) =>
                       onSetEmployeeForm({
@@ -1333,7 +1665,7 @@ const StudioModals = memo(function StudioModals({
                         status: e.target.value as EmployeeStatus,
                       })
                     }
-                    className="tv-input w-full px-3 py-2"
+                    className="w-full px-3 py-2"
                   >
                     {(
                       ["ACTIVE", "ON_LEAVE", "OFF_SHIFT"] as EmployeeStatus[]
@@ -1342,16 +1674,18 @@ const StudioModals = memo(function StudioModals({
                         {EMPLOYEE_STATUS_LABELS[st]}
                       </option>
                     ))}
-                  </select>
+                  </ModernSelect>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block tv-text-muted mb-1">
-                    {vi ? "Dàn Máy Thêu Phụ Trách" : "Assigned Embroidery Line"}
+                    {vi
+                      ? "Phân Công Đứng Máy Hôm Nay (Luân Chuyển Linh Hoạt)"
+                      : "Running Machine Today (Flexible Dispatch)"}
                   </label>
-                  <select
+                  <ModernSelect
                     value={employeeForm.assignedMachineId}
                     onChange={(e) =>
                       onSetEmployeeForm({
@@ -1359,98 +1693,56 @@ const StudioModals = memo(function StudioModals({
                         assignedMachineId: e.target.value,
                       })
                     }
-                    className="tv-input w-full px-3 py-2"
+                    className="w-full px-3 py-2"
                   >
                     <option value="">
                       {vi
-                        ? "— Không đứng máy cố định —"
-                        : "— Unassigned / Office —"}
+                        ? "— Không đứng máy (Kiểm hàng QC / Giao nhận) —"
+                        : "— Non-machine (QC / Logistics) —"}
                     </option>
                     {machines.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name} ({m.heads} {vi ? "đầu" : "heads"})
                       </option>
                     ))}
-                  </select>
+                  </ModernSelect>
                 </div>
 
                 <div>
                   <label className="block tv-text-muted mb-1">
-                    {vi ? "Hình Thức Tính Lương" : "Pay Structure"}
+                    {vi
+                      ? "Lương Căn Bản Tháng (₫/tháng)"
+                      : "Monthly Base Salary (VND/mo)"}
                   </label>
-                  <select
-                    value={employeeForm.payType}
-                    onChange={(e) =>
+                  <input
+                    type="number"
+                    step="100000"
+                    min={0}
+                    value={employeeForm.monthlyBaseSalary}
+                    onChange={(e) => {
+                      const monthly = Number(e.target.value);
                       onSetEmployeeForm({
                         ...employeeForm,
-                        payType: e.target.value as EmployeePayType,
-                      })
-                    }
-                    className="tv-input w-full px-3 py-2"
-                  >
-                    <option value="Hourly">
-                      {vi
-                        ? "Theo Giờ Công (₫/giờ + OT + Thưởng mũi)"
-                        : "Hourly Rate (VND/hr + OT + Stitch Bonus)"}
-                    </option>
-                    <option value="Monthly">
-                      {vi
-                        ? "Lương Cứng Tháng (₫/tháng + OT + Thưởng)"
-                        : "Fixed Monthly Salary (VND/mo + OT + Bonus)"}
-                    </option>
-                  </select>
+                        payType: "Monthly",
+                        monthlyBaseSalary: monthly,
+                        hourlyRate: Math.round(monthly / 273),
+                      });
+                    }}
+                    className="tv-input w-full px-3 py-2 font-mono font-bold"
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
-                {employeeForm.payType === "Hourly" ? (
-                  <div>
-                    <label className="block tv-text-muted mb-1">
-                      {vi ? "Đơn Giá Lương Giờ (₫/h)" : "Hourly Rate (VND/hr)"}
-                    </label>
-                    <input
-                      type="number"
-                      step="1000"
-                      min={0}
-                      value={employeeForm.hourlyRate}
-                      onChange={(e) =>
-                        onSetEmployeeForm({
-                          ...employeeForm,
-                          hourlyRate: Number(e.target.value),
-                        })
-                      }
-                      className="tv-input w-full px-3 py-2 font-mono"
-                    />
-                  </div>
-                ) : (
-                  <div>
-                    <label className="block tv-text-muted mb-1">
-                      {vi
-                        ? "Lương Cơ Bản Tháng (₫)"
-                        : "Monthly Base Salary (VND)"}
-                    </label>
-                    <input
-                      type="number"
-                      step="100000"
-                      min={0}
-                      value={employeeForm.monthlyBaseSalary}
-                      onChange={(e) =>
-                        onSetEmployeeForm({
-                          ...employeeForm,
-                          monthlyBaseSalary: Number(e.target.value),
-                        })
-                      }
-                      className="tv-input w-full px-3 py-2 font-mono"
-                    />
-                  </div>
-                )}
-
                 <div>
                   <label className="block tv-text-muted mb-1">
-                    {vi ? "Số Giờ Công Tháng" : "Hours Worked (Month)"}
+                    {vi
+                      ? "Giờ Công Tháng (10.5h/ngày)"
+                      : "Hours Worked (10.5h/day)"}
                   </label>
                   <input
                     type="number"
+                    step="0.5"
                     min={0}
                     value={employeeForm.hoursWorkedMonth}
                     onChange={(e) =>
@@ -1461,14 +1753,21 @@ const StudioModals = memo(function StudioModals({
                     }
                     className="tv-input w-full px-3 py-2 font-mono"
                   />
+                  <span className="mt-0.5 block text-[10px] text-emerald-400">
+                    ≈ {(employeeForm.hoursWorkedMonth / 10.5).toFixed(1)}{" "}
+                    {vi ? "ngày công (+35k cơm/ngày)" : "days (+35k meal/day)"}
+                  </span>
                 </div>
 
                 <div>
                   <label className="block tv-text-muted mb-1">
-                    {vi ? "Giờ Tăng Ca OT (1.5x)" : "Overtime Hours (1.5x)"}
+                    {vi
+                      ? "Giờ Tăng Ca Chủ Nhật (×200%)"
+                      : "Sunday OT Hours (×200%)"}
                   </label>
                   <input
                     type="number"
+                    step="0.5"
                     min={0}
                     value={employeeForm.overtimeHoursMonth}
                     onChange={(e) =>
@@ -1479,59 +1778,21 @@ const StudioModals = memo(function StudioModals({
                     }
                     className="tv-input w-full px-3 py-2 font-mono"
                   />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block tv-text-muted mb-1">
-                    {vi
-                      ? "Sản Lượng Mũi Thêu Tháng"
-                      : "Stitches Completed (Mo)"}
-                  </label>
-                  <input
-                    type="number"
-                    step="10000"
-                    min={0}
-                    value={employeeForm.stitchesCompletedMonth}
-                    onChange={(e) =>
-                      onSetEmployeeForm({
-                        ...employeeForm,
-                        stitchesCompletedMonth: Number(e.target.value),
-                      })
-                    }
-                    className="tv-input w-full px-3 py-2 font-mono"
-                  />
+                  <span className="mt-0.5 block text-[10px] text-sky-400">
+                    ≈ {(employeeForm.overtimeHoursMonth / 10.5).toFixed(1)}{" "}
+                    {vi ? "ngày CN (nhân 200%)" : "Sundays (×200%)"}
+                  </span>
                 </div>
 
                 <div>
                   <label className="block tv-text-muted mb-1">
                     {vi
-                      ? "Thưởng Mũi (₫ / 10k mũi)"
-                      : "Bonus (VND / 10k Stitches)"}
+                      ? "Nhà Trọ (500k) + Chuyên Cần (500k)"
+                      : "Housing (500k) + Attendance (500k)"}
                   </label>
                   <input
                     type="number"
-                    step="500"
-                    min={0}
-                    value={employeeForm.stitchBonusPer10k}
-                    onChange={(e) =>
-                      onSetEmployeeForm({
-                        ...employeeForm,
-                        stitchBonusPer10k: Number(e.target.value),
-                      })
-                    }
-                    className="tv-input w-full px-3 py-2 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block tv-text-muted mb-1">
-                    {vi ? "Phụ Cấp & Thưởng (₫)" : "Allowance & Bonus (VND)"}
-                  </label>
-                  <input
-                    type="number"
-                    step="50000"
+                    step="100000"
                     min={0}
                     value={employeeForm.allowanceAndBonus}
                     onChange={(e) =>
@@ -1542,6 +1803,9 @@ const StudioModals = memo(function StudioModals({
                     }
                     className="tv-input w-full px-3 py-2 font-mono"
                   />
+                  <span className="mt-0.5 block text-[10px] tv-text-muted">
+                    {vi ? "Chuẩn xưởng: 1.000.000đ/tháng" : "Standard: 1,000,000 VND/mo"}
+                  </span>
                 </div>
               </div>
 
@@ -1550,7 +1814,7 @@ const StudioModals = memo(function StudioModals({
                   <label className="block tv-text-muted mb-1">
                     {vi ? "Trạng Thái Chi Lương" : "Payroll Payment Status"}
                   </label>
-                  <select
+                  <ModernSelect
                     value={employeeForm.salaryPaymentStatus}
                     onChange={(e) =>
                       onSetEmployeeForm({
@@ -1559,7 +1823,7 @@ const StudioModals = memo(function StudioModals({
                           .value as SalaryPaymentStatus,
                       })
                     }
-                    className="tv-input w-full px-3 py-2"
+                    className="w-full px-3 py-2"
                   >
                     <option value="UNPAID">
                       {SALARY_STATUS_LABELS.UNPAID}
@@ -1568,7 +1832,7 @@ const StudioModals = memo(function StudioModals({
                       {SALARY_STATUS_LABELS.PARTIAL_ADVANCE}
                     </option>
                     <option value="PAID">{SALARY_STATUS_LABELS.PAID}</option>
-                  </select>
+                  </ModernSelect>
                 </div>
 
                 <div>
@@ -1596,8 +1860,8 @@ const StudioModals = memo(function StudioModals({
               <div>
                 <label className="block tv-text-muted mb-1">
                   {vi
-                    ? "Ghi Chú Tay Nghề / Phân Công"
-                    : "Skill & Shift Notes"}
+                    ? "Ghi Chú Tay Nghề / Công Việc Hằng Ngày"
+                    : "Skill & Daily Duty Notes"}
                 </label>
                 <input
                   type="text"
@@ -1610,8 +1874,8 @@ const StudioModals = memo(function StudioModals({
                   }
                   placeholder={
                     vi
-                      ? "VD: Thợ chính đứng máy Tajima 6 đầu, chuyên hàng nón 3D Puff"
-                      : "e.g., Lead operator on 6-head Tajima, 3D Puff cap specialist"
+                      ? "VD: Thành thạo tự lên khung áo thun & nón 3D; vận hành linh hoạt 5 máy Tajima 20 đầu"
+                      : "e.g., Skilled in garment & 3D cap hooping; rotates across all 5 × 20-head Tajima machines"
                   }
                   className="tv-input w-full px-3 py-2"
                 />

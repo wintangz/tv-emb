@@ -4,9 +4,9 @@
   --tv-bg: #090d16;
   --tv-surface: #111827;
   --tv-surface-2: #1e293b;
-  --tv-border: #1f2937;
+  --tv-border: #334155;
   --tv-text: #f8fafc;
-  --tv-text-muted: #94a3b8;
+  --tv-text-muted: #cbd5e1;
   --tv-accent: #f59e0b;
   --tv-accent-fg: #090d16;
   --tv-radius: 0.75rem;
@@ -20,61 +20,260 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Theme-aware helper classes */
-.tv-bg {
-  background-color: var(--tv-bg);
-}
-.tv-surface {
+select option {
   background-color: var(--tv-surface);
-}
-.tv-surface-2 {
-  background-color: var(--tv-surface-2);
-}
-.tv-border {
-  border-color: var(--tv-border);
-}
-.tv-text {
   color: var(--tv-text);
 }
-.tv-text-muted {
-  color: var(--tv-text-muted);
+
+@layer utilities {
+  /* Theme-aware helper classes inside @layer utilities so Tailwind hover: utilities can always override them */
+  .tv-bg {
+    background-color: var(--tv-bg);
+  }
+  .tv-surface {
+    background-color: color-mix(in srgb, var(--tv-surface) 88%, transparent);
+    backdrop-filter: blur(12px);
+  }
+  .tv-surface-2 {
+    background-color: color-mix(in srgb, var(--tv-surface-2) 84%, transparent);
+  }
+  .tv-border {
+    border-color: var(--tv-border);
+  }
+  .tv-text {
+    color: var(--tv-text);
+  }
+  .tv-text-muted {
+    color: var(--tv-text-muted);
+  }
+  .tv-accent-bg {
+    background-color: var(--tv-accent);
+    color: var(--tv-accent-fg);
+  }
+  .tv-accent-text {
+    color: var(--tv-accent);
+  }
+  .tv-accent-border {
+    border-color: var(--tv-accent);
+  }
 }
-.tv-accent-bg {
-  background-color: var(--tv-accent);
-  color: var(--tv-accent-fg);
+
+/* Interactive hover background & border transitions for buttons and links */
+button.tv-surface,
+button.tv-surface-2 {
+  border-color: var(--tv-border);
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
 }
-.tv-accent-text {
-  color: var(--tv-accent);
+
+button.tv-surface:hover,
+a.tv-surface:hover {
+  background-color: color-mix(
+    in srgb,
+    var(--tv-accent) 16%,
+    var(--tv-surface-2)
+  );
+  border-color: color-mix(in srgb, var(--tv-accent) 60%, var(--tv-border));
 }
-.tv-accent-border {
-  border-color: var(--tv-accent);
+
+button.tv-surface-2:hover,
+a.tv-surface-2:hover {
+  background-color: color-mix(
+    in srgb,
+    var(--tv-accent) 18%,
+    var(--tv-surface-2)
+  );
+  border-color: color-mix(in srgb, var(--tv-accent) 60%, var(--tv-border));
 }
+
+button.tv-accent-bg,
+a.tv-accent-bg {
+  transition:
+    background-color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+button.tv-accent-bg:hover,
+a.tv-accent-bg:hover {
+  background-color: color-mix(in srgb, var(--tv-accent) 82%, #ffffff 18%);
+  box-shadow: 0 4px 14px -2px color-mix(in srgb, var(--tv-accent) 45%, transparent);
+}
+
+.tv-input:hover {
+  border-color: color-mix(in srgb, var(--tv-accent) 55%, var(--tv-border));
+}
+
 .tv-card {
-  background-color: var(--tv-surface);
+  background-color: color-mix(in srgb, var(--tv-surface) 90%, transparent);
+  backdrop-filter: blur(12px);
   border: 1px solid var(--tv-border);
   border-radius: var(--tv-radius);
   box-shadow:
     0 6px 24px -6px rgba(0, 0, 0, 0.22),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
   transition:
     border-color 0.18s ease,
     box-shadow 0.18s ease,
     transform 0.18s ease;
 }
 .tv-card:hover {
-  border-color: color-mix(in srgb, var(--tv-accent) 32%, var(--tv-border));
+  border-color: color-mix(in srgb, var(--tv-accent) 40%, var(--tv-border));
 }
 .tv-input {
-  background-color: var(--tv-surface-2);
+  background-color: color-mix(in srgb, var(--tv-surface-2) 86%, transparent);
   border: 1px solid var(--tv-border);
   color: var(--tv-text);
-  border-radius: calc(var(--tv-radius) * 0.75);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  border-radius: 0.75rem;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
 }
 .tv-input:focus {
   outline: none;
   border-color: var(--tv-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tv-accent) 24%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tv-accent) 24%, transparent);
+}
+
+/* Modern Custom Select Trigger & Translucent Glass Popover Menu */
+.tv-modern-select-trigger {
+  background-color: color-mix(in srgb, var(--tv-surface-2) 84%, transparent);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--tv-border);
+  box-shadow:
+    0 2px 6px -1px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.tv-modern-select-trigger:hover {
+  background-color: color-mix(
+    in srgb,
+    var(--tv-accent) 18%,
+    var(--tv-surface-2)
+  );
+  border-color: color-mix(in srgb, var(--tv-accent) 65%, var(--tv-border));
+  box-shadow:
+    0 4px 12px -2px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.09);
+}
+
+.tv-modern-select-ghost {
+  background-color: color-mix(in srgb, var(--tv-surface) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tv-border) 85%, transparent);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.12);
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.tv-modern-select-ghost:hover {
+  background-color: color-mix(
+    in srgb,
+    var(--tv-accent) 18%,
+    var(--tv-surface-2)
+  );
+  border-color: color-mix(in srgb, var(--tv-accent) 65%, var(--tv-border));
+}
+
+.tv-modern-select-menu {
+  background-color: color-mix(in srgb, var(--tv-surface) 90%, transparent);
+  backdrop-filter: blur(18px);
+  border: 1px solid color-mix(in srgb, var(--tv-accent) 45%, var(--tv-border));
+  box-shadow:
+    0 20px 44px -10px rgba(0, 0, 0, 0.6),
+    0 4px 16px -2px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+  animation: tvSelectPopoverIn 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tv-modern-select-option {
+  background-color: transparent;
+}
+
+.tv-modern-select-option-hover,
+.tv-modern-select-option:hover {
+  background-color: color-mix(
+    in srgb,
+    var(--tv-accent) 18%,
+    var(--tv-surface-2)
+  );
+}
+
+.tv-modern-select-option-active {
+  background-color: color-mix(
+    in srgb,
+    var(--tv-accent) 26%,
+    var(--tv-surface-2)
+  );
+  color: var(--tv-accent);
+}
+
+.tv-modern-select-option-active:hover {
+  background-color: color-mix(
+    in srgb,
+    var(--tv-accent) 34%,
+    var(--tv-surface-2)
+  );
+}
+
+@keyframes tvSelectPopoverIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* High-contrast remapping for Light Mode so pastel -300/-400 text & badges are crisp and legible */
+html[data-theme-mode="light"] .text-emerald-300,
+html[data-theme-mode="light"] .text-emerald-400 {
+  color: #047857 !important;
+}
+
+html[data-theme-mode="light"] .text-amber-300,
+html[data-theme-mode="light"] .text-amber-400 {
+  color: #b45309 !important;
+}
+
+html[data-theme-mode="light"] .text-sky-300,
+html[data-theme-mode="light"] .text-sky-400 {
+  color: #0369a1 !important;
+}
+
+html[data-theme-mode="light"] .text-rose-300,
+html[data-theme-mode="light"] .text-rose-400 {
+  color: #be123c !important;
+}
+
+html[data-theme-mode="light"] .text-purple-300,
+html[data-theme-mode="light"] .text-purple-400 {
+  color: #6d28d9 !important;
+}
+
+html[data-theme-mode="light"] .text-indigo-300,
+html[data-theme-mode="light"] .text-indigo-400 {
+  color: #4338ca !important;
+}
+
+html[data-theme-mode="light"] .text-slate-400,
+html[data-theme-mode="light"] .text-zinc-400 {
+  color: #334155 !important;
+}
+
+html[data-theme-mode="light"] .tv-card {
+  box-shadow:
+    0 4px 16px -4px rgba(15, 23, 42, 0.08),
+    0 1px 3px 0 rgba(15, 23, 42, 0.06);
 }
 
 @media print {

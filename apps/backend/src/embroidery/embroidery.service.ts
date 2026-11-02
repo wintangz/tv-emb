@@ -1,8 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createSeedDatabase } from './embroidery.seed.js';
 import type {
+  ColorStop,
   Customer,
   DashboardMetrics,
   DashboardPayload,
@@ -11,24 +18,56 @@ import type {
   EmbroideryMachine,
   EmbroideryOrder,
   Employee,
+  EmployeeRole,
+  EmployeeShift,
+  EmployeeStatus,
+  GarmentPlacement,
   InventoryItem,
+  MachineStatus,
   OrderStatus,
   PaymentStatus,
   QuoteBreakdown,
   QuoteInput,
+  SalaryPaymentStatus,
+  SizeBreakdown,
+  StitchPathSegment,
 } from './embroidery.types.js';
 
+const STANDARD_HOURS_PER_DAY = 10.5;
+const STANDARD_WORK_DAYS_PER_MONTH = 26;
+const STANDARD_MONTHLY_HOURS =
+  STANDARD_HOURS_PER_DAY * STANDARD_WORK_DAYS_PER_MONTH; // 273h
+const MEAL_ALLOWANCE_PER_DAY = 35000;
+const MASTER_CONE_COST_VND = 45000;
+const MIN_MASTER_CONES_PER_COLOR_20_HEADS = 5;
+
 export function calculateEmployeeMonthlyCost(emp: Employee): number {
+  const daysWorked = Math.max(
+    0,
+    Math.round((emp.hoursWorkedMonth / STANDARD_HOURS_PER_DAY) * 10) / 10,
+  );
   const basePay =
     emp.payType === 'Monthly'
-      ? emp.monthlyBaseSalary
-      : emp.hourlyRate * emp.hoursWorkedMonth;
+      ? Math.round(
+          (emp.monthlyBaseSalary / STANDARD_WORK_DAYS_PER_MONTH) * daysWorked,
+        )
+      : Math.round(emp.hourlyRate * emp.hoursWorkedMonth);
   const effectiveHourly =
-    emp.payType === 'Monthly' ? emp.monthlyBaseSalary / 176 : emp.hourlyRate;
-  const overtimePay = effectiveHourly * 1.5 * emp.overtimeHoursMonth;
-  const stitchBonus =
-    (emp.stitchesCompletedMonth / 10000) * emp.stitchBonusPer10k;
-  return Math.round(basePay + overtimePay + stitchBonus + emp.allowanceAndBonus);
+    emp.payType === 'Monthly'
+      ? emp.monthlyBaseSalary / STANDARD_MONTHLY_HOURS
+      : emp.hourlyRate;
+  // Tăng ca Chủ Nhật × 200%
+  const overtimePay = Math.round(
+    effectiveHourly * 2.0 * emp.overtimeHoursMonth,
+  );
+  const mealAllowance = Math.round(daysWorked * MEAL_ALLOWANCE_PER_DAY);
+  const stitchBonus = Math.round(
+    (emp.stitchesCompletedMonth / 10000) * emp.stitchBonusPer10k,
+  );
+  const housingAndAttendance = Math.round(emp.allowanceAndBonus ?? 0);
+  return Math.round(
+    basePay + overtimePay + mealAllowance + housingAndAttendance + stitchBonus,
+  );
 }
 
 const ACTIVE_ORDER_STATUSES = new Set<OrderStatus>([
@@ -40,16 +79,328 @@ const ACTIVE_ORDER_STATUSES = new Set<OrderStatus>([
 ]);
 
 @Injectable()
-export class EmbroideryService {
+export class EmbroideryService implements OnModuleInit, OnModuleDestroy {
   private readonly dbFilePath: string;
   private db: EmbroideryDatabase;
   private cachedMetrics: DashboardMetrics | null = null;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private prisma: PrismaClient | null = null;
 
   constructor() {
     const dataDir = path.resolve(process.cwd(), 'data');
     this.dbFilePath = path.join(dataDir, 'embroidery-db.json');
     this.db = this.loadDatabase();
+  }
+
+  async onModuleInit(): Promise<void> {
+    if (!process.env.DATABASE_URL) {
+      try {
+        process.loadEnvFile?.(path.resolve(process.cwd(), '.env'));
+      } catch {
+        // Ignore if .env does not exist
+      }
+    }
+    if (!process.env.DATABASE_URL) {
+      return;
+    }
+    try {
+      this.prisma = new PrismaClient();
+      await this.prisma.$connect();
+      await this.syncFromPostgres();
+    } catch {
+      this.prisma = null;
+    }
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    if (this.prisma) {
+      await this.prisma.$disconnect();
+      this.prisma = null;
+    }
+  }
+
+  private async syncFromPostgres(): Promise<void> {
+    if (!this.prisma) return;
+    const orderCount = await this.prisma.embroideryOrder.count();
+    if (orderCount === 0) {
+      await this.persistToPostgres(this.db);
+      return;
+    }
+
+    const [customers, designs, machines, orders, inventory, employees] =
+      await Promise.all([
+        this.prisma.customer.findMany(),
+        this.prisma.embroideryDesign.findMany(),
+        this.prisma.embroideryMachine.findMany(),
+        this.prisma.embroideryOrder.findMany(),
+        this.prisma.inventoryItem.findMany(),
+        this.prisma.employee.findMany(),
+      ]);
+
+    this.db = {
+      customers: customers.map((c) => ({
+        id: c.id,
+        name: c.name,
+        company: c.company,
+        email: c.email,
+        phone: c.phone,
+        totalOrders: c.totalOrders,
+        totalSpend: c.totalSpend,
+        preferredGarments: c.preferredGarments,
+        notes: c.notes,
+      })),
+      designs: designs.map((d) => ({
+        id: d.id,
+        code: d.code,
+        name: d.name,
+        clientName: d.clientName,
+        stitchCount: d.stitchCount,
+        widthMm: d.widthMm,
+        heightMm: d.heightMm,
+        colorSequence: (d.colorSequence as unknown as ColorStop[]) ?? [],
+        hoopSize: d.hoopSize,
+        fileFormat: d.fileFormat as EmbroideryDesign['fileFormat'],
+        complexity: d.complexity as EmbroideryDesign['complexity'],
+        digitizerNotes: d.digitizerNotes,
+        createdAt: d.createdAt,
+        jumpCount: d.jumpCount ?? undefined,
+        trimCount: d.trimCount ?? undefined,
+        stitchPaths:
+          (d.stitchPaths as unknown as StitchPathSegment[]) ?? undefined,
+      })),
+      machines: machines.map((m) => ({
+        id: m.id,
+        name: m.name,
+        brand: m.brand as EmbroideryMachine['brand'],
+        model: m.model,
+        heads: m.heads,
+        needlesPerHead: m.needlesPerHead,
+        status: m.status as MachineStatus,
+        currentSpm: m.currentSpm,
+        maxSpm: m.maxSpm,
+        activeOrderId: m.activeOrderId,
+        activeOrderNumber: m.activeOrderNumber,
+        progressPercent: m.progressPercent,
+        totalStitchesToday: m.totalStitchesToday,
+        threadBreaksToday: m.threadBreaksToday,
+        lastMaintenanceDate: m.lastMaintenanceDate,
+      })),
+      orders: orders.map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        customerId: o.customerId,
+        customerName: o.customerName,
+        companyName: o.companyName,
+        designId: o.designId,
+        designName: o.designName,
+        garmentType: o.garmentType,
+        garmentColor: o.garmentColor,
+        placement: o.placement as GarmentPlacement,
+        quantity: o.quantity,
+        completedQuantity: o.completedQuantity,
+        defectQuantity: o.defectQuantity,
+        threadMetersUsed: o.threadMetersUsed,
+        sizeBreakdown:
+          (o.sizeBreakdown as unknown as SizeBreakdown) ?? undefined,
+        stitchCount: o.stitchCount,
+        colorCount: o.colorCount,
+        threadColors: (o.threadColors as unknown as string[]) ?? [],
+        status: o.status as OrderStatus,
+        paymentStatus: (o.paymentStatus as PaymentStatus) ?? 'UNPAID',
+        amountPaid: o.amountPaid ?? 0,
+        assignedMachineId: o.assignedMachineId,
+        dueDate: o.dueDate,
+        rushOrder: o.rushOrder,
+        digitizingFee: o.digitizingFee,
+        unitPrice: o.unitPrice,
+        totalPrice: o.totalPrice,
+        notes: o.notes,
+        createdAt: o.createdAt,
+      })),
+      inventory: inventory.map((i) => ({
+        id: i.id,
+        sku: i.sku,
+        name: i.name,
+        category: i.category as InventoryItem['category'],
+        brand: i.brand,
+        colorCode: i.colorCode ?? undefined,
+        colorHex: i.colorHex ?? undefined,
+        material: i.material,
+        quantity: i.quantity,
+        unit: i.unit as InventoryItem['unit'],
+        minThreshold: i.minThreshold,
+        unitCost: i.unitCost,
+      })),
+      employees: employees.map((e) => ({
+        id: e.id,
+        code: e.code,
+        name: e.name,
+        role: e.role as EmployeeRole,
+        shift: e.shift as EmployeeShift,
+        status: e.status as EmployeeStatus,
+        phone: e.phone,
+        assignedMachineId: e.assignedMachineId,
+        payType: e.payType as Employee['payType'],
+        hourlyRate: e.hourlyRate,
+        monthlyBaseSalary: e.monthlyBaseSalary,
+        hoursWorkedMonth: e.hoursWorkedMonth,
+        overtimeHoursMonth: e.overtimeHoursMonth,
+        stitchesCompletedMonth: e.stitchesCompletedMonth,
+        stitchBonusPer10k: e.stitchBonusPer10k,
+        allowanceAndBonus: e.allowanceAndBonus,
+        paymentStatus: e.paymentStatus as SalaryPaymentStatus,
+        amountPaidMonth: e.amountPaidMonth,
+        joinedDate: e.joinedDate,
+        notes: e.notes,
+      })),
+    };
+    this.cachedMetrics = null;
+  }
+
+  private async persistToPostgres(data: EmbroideryDatabase): Promise<void> {
+    if (!this.prisma) return;
+    const p = this.prisma;
+    try {
+      await p.$transaction([
+        p.customer.deleteMany(),
+        p.customer.createMany({
+          data: data.customers.map((c) => ({
+            id: c.id,
+            name: c.name,
+            company: c.company,
+            email: c.email,
+            phone: c.phone,
+            totalOrders: c.totalOrders,
+            totalSpend: c.totalSpend,
+            preferredGarments: c.preferredGarments,
+            notes: c.notes ?? '',
+          })),
+        }),
+        p.embroideryDesign.deleteMany(),
+        p.embroideryDesign.createMany({
+          data: data.designs.map((d) => ({
+            id: d.id,
+            code: d.code,
+            name: d.name,
+            clientName: d.clientName,
+            stitchCount: d.stitchCount,
+            widthMm: d.widthMm,
+            heightMm: d.heightMm,
+            colorSequence: JSON.parse(JSON.stringify(d.colorSequence ?? [])),
+            hoopSize: d.hoopSize,
+            fileFormat: d.fileFormat,
+            complexity: d.complexity,
+            digitizerNotes: d.digitizerNotes ?? '',
+            createdAt: d.createdAt,
+            jumpCount: d.jumpCount ?? null,
+            trimCount: d.trimCount ?? null,
+            stitchPaths: d.stitchPaths
+              ? JSON.parse(JSON.stringify(d.stitchPaths))
+              : undefined,
+          })),
+        }),
+        p.embroideryMachine.deleteMany(),
+        p.embroideryMachine.createMany({
+          data: data.machines.map((m) => ({
+            id: m.id,
+            name: m.name,
+            brand: m.brand,
+            model: m.model,
+            heads: m.heads,
+            needlesPerHead: m.needlesPerHead,
+            status: m.status,
+            currentSpm: m.currentSpm,
+            maxSpm: m.maxSpm,
+            activeOrderId: m.activeOrderId ?? null,
+            activeOrderNumber: m.activeOrderNumber ?? null,
+            progressPercent: m.progressPercent,
+            totalStitchesToday: m.totalStitchesToday,
+            threadBreaksToday: m.threadBreaksToday,
+            lastMaintenanceDate: m.lastMaintenanceDate ?? '2026-10-15',
+          })),
+        }),
+        p.embroideryOrder.deleteMany(),
+        p.embroideryOrder.createMany({
+          data: data.orders.map((o) => ({
+            id: o.id,
+            orderNumber: o.orderNumber,
+            customerId: o.customerId,
+            customerName: o.customerName,
+            companyName: o.companyName,
+            designId: o.designId,
+            designName: o.designName,
+            garmentType: o.garmentType,
+            garmentColor: o.garmentColor,
+            placement: o.placement,
+            quantity: o.quantity,
+            completedQuantity: o.completedQuantity,
+            defectQuantity: o.defectQuantity ?? 0,
+            threadMetersUsed: o.threadMetersUsed ?? 0,
+            sizeBreakdown: o.sizeBreakdown
+              ? JSON.parse(JSON.stringify(o.sizeBreakdown))
+              : undefined,
+            stitchCount: o.stitchCount,
+            colorCount: o.colorCount,
+            threadColors: JSON.parse(JSON.stringify(o.threadColors ?? [])),
+            status: o.status,
+            paymentStatus: o.paymentStatus ?? 'UNPAID',
+            amountPaid: o.amountPaid ?? 0,
+            assignedMachineId: o.assignedMachineId ?? null,
+            dueDate: o.dueDate,
+            rushOrder: Boolean(o.rushOrder),
+            digitizingFee: o.digitizingFee,
+            unitPrice: o.unitPrice,
+            totalPrice: o.totalPrice,
+            notes: o.notes ?? '',
+            createdAt: o.createdAt,
+          })),
+        }),
+        p.inventoryItem.deleteMany(),
+        p.inventoryItem.createMany({
+          data: data.inventory.map((i) => ({
+            id: i.id,
+            sku: i.sku,
+            name: i.name,
+            category: i.category,
+            brand: i.brand,
+            colorCode: i.colorCode ?? null,
+            colorHex: i.colorHex ?? null,
+            material: i.material,
+            quantity: i.quantity,
+            unit: i.unit,
+            minThreshold: i.minThreshold,
+            unitCost: i.unitCost,
+          })),
+        }),
+        p.employee.deleteMany(),
+        p.employee.createMany({
+          data: (data.employees ?? []).map((e) => ({
+            id: e.id,
+            code: e.code,
+            name: e.name,
+            role: e.role,
+            shift: e.shift,
+            status: e.status,
+            phone: e.phone,
+            assignedMachineId: e.assignedMachineId ?? null,
+            payType: e.payType,
+            hourlyRate: e.hourlyRate,
+            monthlyBaseSalary: e.monthlyBaseSalary,
+            hoursWorkedMonth: e.hoursWorkedMonth,
+            overtimeHoursMonth: e.overtimeHoursMonth,
+            stitchesCompletedMonth: e.stitchesCompletedMonth,
+            stitchBonusPer10k: e.stitchBonusPer10k,
+            allowanceAndBonus: e.allowanceAndBonus,
+            paymentStatus: e.paymentStatus,
+            amountPaidMonth: e.amountPaidMonth,
+            joinedDate: e.joinedDate,
+            notes: e.notes ?? '',
+          })),
+        }),
+      ]);
+    } catch {
+      // Ignore background sync error
+    }
   }
 
   private loadDatabase(): EmbroideryDatabase {
@@ -63,6 +414,25 @@ export class EmbroideryService {
           (parsed.orders?.[0]?.unitPrice ?? 0) < 1000;
         if (!hasLegacyUsd) {
           const fallbackSeed = createSeedDatabase();
+          const hasLegacyMachines =
+            parsed.machines?.some((m) => m.brand !== 'Tajima') ||
+            (parsed.machines?.length ?? 0) < 5;
+          const hasLegacyEmployees =
+            !parsed.employees ||
+            parsed.employees.length === 0 ||
+            parsed.employees.some((e) => e.hoursWorkedMonth < 200);
+          const hasLegacyInventory =
+            !parsed.inventory ||
+            parsed.inventory.some(
+              (i) =>
+                (i.category as string) === 'Needles' ||
+                i.sku.startsWith('MAD-') ||
+                i.sku.startsWith('CHI-TREN-1800'),
+            );
+          if (hasLegacyMachines || hasLegacyEmployees || hasLegacyInventory) {
+            this.saveDatabase(fallbackSeed, true);
+            return fallbackSeed;
+          }
           parsed.orders = (parsed.orders ?? []).map((o) => ({
             ...o,
             paymentStatus: o.paymentStatus ?? 'UNPAID',
@@ -88,6 +458,7 @@ export class EmbroideryService {
   ): void {
     this.cachedMetrics = null;
     if (immediate) {
+      void this.persistToPostgres(data);
       try {
         const dir = path.dirname(this.dbFilePath);
         if (!fs.existsSync(dir)) {
@@ -109,6 +480,7 @@ export class EmbroideryService {
     }
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null;
+      void this.persistToPostgres(this.db);
       const dir = path.dirname(this.dbFilePath);
       void fs.promises
         .mkdir(dir, { recursive: true })
@@ -136,10 +508,50 @@ export class EmbroideryService {
     let totalQueuedStitches = 0;
     let monthlyRevenue = 0;
     let collectedRevenue = 0;
+    let monthlyMaterialCost = 0;
+    let monthlyConsumablesCost = 0;
+    let monthlyShippingCost = 0;
 
     for (const order of this.db.orders) {
       monthlyRevenue += order.totalPrice;
       collectedRevenue += order.amountPaid ?? 0;
+
+      const colorCount = Math.max(1, order.colorCount || 1);
+      const totalStitches = order.quantity * order.stitchCount;
+      const estimatedTotalMeters = Math.round((totalStitches / 1000) * 5.2);
+      const metersPerColor = estimatedTotalMeters / colorCount;
+      const rawConesByLength = Math.max(1, Math.ceil(metersPerColor / 4500));
+      const splitThreadFor20Heads =
+        order.splitThreadFor20Heads !== undefined
+          ? Boolean(order.splitThreadFor20Heads)
+          : order.notes.toLowerCase().includes('sang ra 20') ||
+            order.notes.toLowerCase().includes('sang 20');
+      const masterConesPerColor = splitThreadFor20Heads
+        ? Math.max(MIN_MASTER_CONES_PER_COLOR_20_HEADS, rawConesByLength)
+        : rawConesByLength;
+      const totalMasterConesToBuy = colorCount * masterConesPerColor;
+      const upperThreadCost = totalMasterConesToBuy * MASTER_CONE_COST_VND;
+
+      const is3dPuff = Boolean(
+        order.is3DPuff ||
+        order.designName.toLowerCase().includes('3d') ||
+        order.garmentType.toLowerCase().includes('3d') ||
+        order.notes.toLowerCase().includes('3d'),
+      );
+      const evaFoamCost = is3dPuff ? order.quantity * 4500 : 0;
+      const consumablesCost = order.quantity * 2000;
+      const shippingMode =
+        order.shippingMode ??
+        (order.notes.toLowerCase().includes('chành xe')
+          ? 'CHANH_XE_PICKUP'
+          : 'LOCAL_2_WAY');
+      const shippingCost =
+        order.shippingCost ??
+        (shippingMode === 'CHANH_XE_PICKUP' ? 150000 : 300000);
+
+      monthlyMaterialCost += upperThreadCost + evaFoamCost;
+      monthlyConsumablesCost += consumablesCost;
+      monthlyShippingCost += shippingCost;
 
       if (ACTIVE_ORDER_STATUSES.has(order.status)) {
         activeOrdersCount += 1;
@@ -188,11 +600,20 @@ export class EmbroideryService {
     }
     monthlyLaborCost = Math.round(monthlyLaborCost);
     paidLaborCost = Math.round(paidLaborCost);
+    monthlyMaterialCost = Math.round(monthlyMaterialCost);
+    monthlyConsumablesCost = Math.round(monthlyConsumablesCost);
+    monthlyShippingCost = Math.round(monthlyShippingCost);
     const unpaidLaborCost = Math.max(
       0,
       Math.round(monthlyLaborCost - paidLaborCost),
     );
-    const estimatedNetProfit = Math.round(monthlyRevenue - monthlyLaborCost);
+    const estimatedNetProfit = Math.round(
+      monthlyRevenue -
+        monthlyLaborCost -
+        monthlyMaterialCost -
+        monthlyConsumablesCost -
+        monthlyShippingCost,
+    );
 
     this.cachedMetrics = {
       activeOrdersCount,
@@ -211,6 +632,9 @@ export class EmbroideryService {
       monthlyLaborCost,
       paidLaborCost,
       unpaidLaborCost,
+      monthlyMaterialCost,
+      monthlyConsumablesCost,
+      monthlyShippingCost,
       estimatedNetProfit,
     };
 
@@ -567,12 +991,13 @@ export class EmbroideryService {
   createMachine(payload: Partial<EmbroideryMachine>): EmbroideryMachine {
     const newMachine: EmbroideryMachine = {
       id: `mach-${Date.now()}`,
-      name: payload.name ?? `Line ${this.db.machines.length + 1} — Multi-Head`,
+      name:
+        payload.name ?? `Máy 0${this.db.machines.length + 1} — Tajima TFGN2`,
       brand: payload.brand ?? 'Tajima',
-      model: payload.model ?? 'TMEZ-SC1501',
-      heads: Number(payload.heads ?? 1),
-      needlesPerHead: Number(payload.needlesPerHead ?? 15),
-      maxSpm: Number(payload.maxSpm ?? 1200),
+      model: payload.model ?? 'TFGN2',
+      heads: Number(payload.heads ?? 20),
+      needlesPerHead: Number(payload.needlesPerHead ?? 9),
+      maxSpm: Number(payload.maxSpm ?? 1000),
       currentSpm: Number(payload.currentSpm ?? 0),
       status: payload.status ?? 'IDLE',
       activeOrderId: payload.activeOrderId ?? null,
@@ -816,8 +1241,7 @@ export class EmbroideryService {
       ),
       amountPaidMonth: Math.round(Number(payload.amountPaidMonth ?? 0)),
       paymentStatus: payload.paymentStatus ?? 'UNPAID',
-      joinedDate:
-        payload.joinedDate ?? new Date().toISOString().slice(0, 10),
+      joinedDate: payload.joinedDate ?? new Date().toISOString().slice(0, 10),
       notes: payload.notes ?? '',
     };
     this.db.employees.unshift(newEmployee);
@@ -850,10 +1274,7 @@ export class EmbroideryService {
       );
     }
     if (payload.hoursWorkedMonth !== undefined) {
-      employee.hoursWorkedMonth = Math.max(
-        0,
-        Number(payload.hoursWorkedMonth),
-      );
+      employee.hoursWorkedMonth = Math.max(0, Number(payload.hoursWorkedMonth));
     }
     if (payload.overtimeHoursMonth !== undefined) {
       employee.overtimeHoursMonth = Math.max(
@@ -912,15 +1333,11 @@ export class EmbroideryService {
     const quantity = Math.max(1, Number(input.quantity ?? 24));
     const stitchCount = Math.max(1000, Number(input.stitchCount ?? 8500));
     const colorCount = Math.max(1, Number(input.colorCount ?? 3));
-    const garmentBlankCost = Math.max(
-      0,
-      Number(input.garmentBlankCost ?? 95000),
-    );
+    const garmentBlankCost = Math.max(0, Number(input.garmentBlankCost ?? 0));
     const garmentMarkupPercent = Math.max(
       0,
-      Number(input.garmentMarkupPercent ?? 45),
+      Number(input.garmentMarkupPercent ?? 0),
     );
-    const needsDigitizing = Boolean(input.needsDigitizing ?? true);
     const is3DPuff = Boolean(input.is3DPuff ?? false);
     const rushOrder = Boolean(input.rushOrder ?? false);
 
@@ -946,12 +1363,8 @@ export class EmbroideryService {
         colorSetupPerPiece,
     );
 
-    const rawDigitizing = Math.max(250000, Math.round(thousandUnits * 35000));
-    const digitizingFee = needsDigitizing
-      ? quantity >= 144 && stitchCount <= 15000
-        ? 0
-        : rawDigitizing
-      : 0;
+    // Chính sách xưởng: Thiết kế chương trình .DST & thêu mẫu duyệt miễn phí (0đ)
+    const digitizingFee = 0;
 
     const garmentPricePerPiece = Math.round(
       garmentBlankCost * (1 + garmentMarkupPercent / 100),
@@ -970,13 +1383,40 @@ export class EmbroideryService {
     const finalUnitPrice = Math.round(totalPrice / quantity);
 
     const effectiveStitchesPerHourPerHead = 850 * 60 * 0.72;
-    const activeHeads = Math.min(6, quantity);
+    const activeHeads = Math.min(20, quantity);
     const totalStitches = quantity * stitchCount;
     const estimatedProductionHours = Math.max(
       0.5,
       Math.round(
         (totalStitches / (effectiveStitchesPerHourPerHead * activeHeads)) * 10,
       ) / 10,
+    );
+
+    // Định mức chỉ trên theo số mũi thêu (hoặc tùy chọn sang chỉ 20 đầu khi cần)
+    const estimatedTotalMeters = Math.round((totalStitches / 1000) * 5.2);
+    const metersPerColor = estimatedTotalMeters / colorCount;
+    const rawConesByLength = Math.max(1, Math.ceil(metersPerColor / 4500));
+    const splitThreadFor20Heads = Boolean(input.splitThreadFor20Heads ?? false);
+    const masterConesPerColor = splitThreadFor20Heads
+      ? Math.max(MIN_MASTER_CONES_PER_COLOR_20_HEADS, rawConesByLength)
+      : rawConesByLength;
+    const totalMasterConesToBuy = colorCount * masterConesPerColor;
+    const totalSubConesFor20Heads = splitThreadFor20Heads
+      ? colorCount * 20
+      : totalMasterConesToBuy;
+    const upperThreadCost = totalMasterConesToBuy * MASTER_CONE_COST_VND;
+    const evaFoamCost = is3DPuff ? quantity * 4500 : 0;
+    const consumablesCost = quantity * 2000;
+    const shippingMode = input.shippingMode ?? 'LOCAL_2_WAY';
+    const shippingCost =
+      input.shippingCost ??
+      (shippingMode === 'CHANH_XE_PICKUP' ? 150000 : 300000);
+    const estimatedOrderNetProfit = Math.round(
+      totalPrice -
+        upperThreadCost -
+        evaFoamCost -
+        consumablesCost -
+        shippingCost,
     );
 
     return {
@@ -992,6 +1432,16 @@ export class EmbroideryService {
       totalPrice,
       finalUnitPrice,
       estimatedProductionHours,
+      splitThreadFor20Heads,
+      theoreticalConesPerColor: rawConesByLength,
+      masterConesPerColor,
+      totalMasterConesToBuy,
+      totalSubConesFor20Heads,
+      upperThreadCost,
+      evaFoamCost,
+      consumablesCost,
+      shippingCost,
+      estimatedOrderNetProfit,
     };
   }
 }

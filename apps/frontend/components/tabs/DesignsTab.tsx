@@ -22,8 +22,27 @@ interface DesignsTabProps {
   onQuickSaveParsedDst: (
     parsed: ParsedDstResult,
     clientName: string,
-  ) => Promise<void>;
+  ) => void | Promise<void>;
   onShowToast: (msg: string) => void;
+}
+
+type DstActionMode = "dst_only" | "dst_with_colorway_csv" | "load_inspector";
+
+interface DstDownloadPromptState {
+  mode: "sample" | "design";
+  design?: EmbroideryDesign;
+  samplePreset: "crest" | "lotus" | "star";
+  action: DstActionMode;
+  filename: string;
+}
+
+function triggerDownloadBlob(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function DesignsTab({
@@ -48,11 +67,35 @@ function DesignsTab({
   const [parseError, setParseError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(4);
+  const [designSearch, setDesignSearch] = useState<string>("");
+  const [complexityFilter, setComplexityFilter] = useState<
+    "ALL" | EmbroideryDesign["complexity"]
+  >("ALL");
+  const [dstDownloadPrompt, setDstDownloadPrompt] =
+    useState<DstDownloadPromptState | null>(null);
 
-  const effectiveSize = pageSize <= 0 ? Math.max(1, designs.length) : pageSize;
-  const totalPages = Math.max(1, Math.ceil(designs.length / effectiveSize));
+  const filteredDesigns = designs.filter((d) => {
+    if (complexityFilter !== "ALL" && d.complexity !== complexityFilter) {
+      return false;
+    }
+    if (!designSearch.trim()) return true;
+    const q = designSearch.trim().toLowerCase();
+    return (
+      d.code.toLowerCase().includes(q) ||
+      d.name.toLowerCase().includes(q) ||
+      d.clientName.toLowerCase().includes(q) ||
+      d.hoopSize.toLowerCase().includes(q)
+    );
+  });
+
+  const effectiveSize =
+    pageSize <= 0 ? Math.max(1, filteredDesigns.length) : pageSize;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredDesigns.length / effectiveSize),
+  );
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
-  const pagedDesigns = designs.slice(
+  const pagedDesigns = filteredDesigns.slice(
     (safePage - 1) * effectiveSize,
     safePage * effectiveSize,
   );
@@ -91,22 +134,151 @@ function DesignsTab({
     );
   }
 
-  function handleDownloadSampleDst(preset: "crest" | "lotus" | "star") {
+  function openSampleDstModal(preset: "crest" | "lotus" | "star" = "crest") {
     const sample = generateSampleDstBinary(preset);
-    const blob = new Blob([sample.buffer], {
-      type: "application/octet-stream",
+    setDstDownloadPrompt({
+      mode: "sample",
+      samplePreset: preset,
+      action: "dst_only",
+      filename: sample.fileName.replace(/\.dst$/i, ""),
     });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = sample.fileName;
-    a.click();
-    URL.revokeObjectURL(url);
-    onShowToast(
-      vi
-        ? `Đã tải file nhị phân ${sample.fileName} (512B header + 3B stitch packets)`
-        : `Downloaded binary ${sample.fileName} (512B header + 3B stitch packets)`,
-    );
+  }
+
+  function openDesignDstModal(des: EmbroideryDesign) {
+    setDstDownloadPrompt({
+      mode: "design",
+      design: des,
+      samplePreset: "crest",
+      action: "dst_only",
+      filename: des.code || "TV-DESIGN",
+    });
+  }
+
+  function handleConfirmDstDownloadPrompt(e: React.SyntheticEvent) {
+    e.preventDefault();
+    if (!dstDownloadPrompt) return;
+
+    const cleanBase =
+      dstDownloadPrompt.filename.trim().replace(/\.dst$/i, "") || "TV-DESIGN";
+    const dstFilename = `${cleanBase}.dst`;
+
+    if (dstDownloadPrompt.mode === "sample") {
+      const sample = generateSampleDstBinary(dstDownloadPrompt.samplePreset);
+      if (dstDownloadPrompt.action === "load_inspector") {
+        handleLoadSampleDst(dstDownloadPrompt.samplePreset);
+        setDstDownloadPrompt(null);
+        return;
+      }
+
+      const dstBlob = new Blob([sample.buffer], {
+        type: "application/octet-stream",
+      });
+      triggerDownloadBlob(dstFilename, dstBlob);
+
+      if (dstDownloadPrompt.action === "dst_with_colorway_csv") {
+        const parsed = parseDstBuffer(sample.buffer, sample.fileName);
+        const csvRows = [
+          ["Needle #", "Thread Code", "Color Name", "Hex Color"],
+          ...parsed.colorSequence.map((c) => [
+            String(c.needle),
+            c.threadCode,
+            c.name,
+            c.hex,
+          ]),
+        ];
+        const csvContent =
+          "\uFEFF" +
+          csvRows
+            .map((r) => r.map((cell) => `"${cell}"`).join(","))
+            .join("\n");
+        const csvBlob = new Blob([csvContent], {
+          type: "text/csv;charset=utf-8;",
+        });
+        triggerDownloadBlob(`${cleanBase}-colorway.csv`, csvBlob);
+      }
+
+      onShowToast(
+        vi
+          ? `Đã tải file nhị phân ${dstFilename} (512B header + 3B stitch packets)`
+          : `Downloaded binary ${dstFilename} (512B header + 3B stitch packets)`,
+      );
+      setDstDownloadPrompt(null);
+      return;
+    }
+
+    // Design Card Mode
+    const des = dstDownloadPrompt.design;
+    if (!des) return;
+
+    const buf = exportDesignToDstBinary(des);
+
+    if (dstDownloadPrompt.action === "load_inspector") {
+      const parsed = parseDstBuffer(buf, dstFilename);
+      parsed.name = des.name;
+      parsed.colorSequence = structuredClone(des.colorSequence);
+      setDstClientName(des.clientName);
+      setParsedDst(parsed);
+      setSelectedNeedleFilter("ALL");
+      setDstDownloadPrompt(null);
+      onShowToast(
+        vi
+          ? `Đã nạp mẫu ${des.code} vào Trình Mô Phỏng Đường Kim .DST`
+          : `Loaded ${des.code} into the Live .DST Stitch Inspector`,
+      );
+      return;
+    }
+
+    const dstBlob = new Blob([buf], { type: "application/octet-stream" });
+    triggerDownloadBlob(dstFilename, dstBlob);
+
+    if (dstDownloadPrompt.action === "dst_with_colorway_csv") {
+      const csvRows = [
+        [
+          "Design Code",
+          "Design Name",
+          "Needle #",
+          "Thread Code",
+          "Thread Color",
+          "Hex",
+          "Hoop Size",
+          "Total Stitches",
+        ],
+        ...des.colorSequence.map((c) => [
+          des.code,
+          des.name,
+          String(c.needle),
+          c.threadCode,
+          c.name,
+          c.hex,
+          des.hoopSize,
+          String(des.stitchCount),
+        ]),
+      ];
+      const csvContent =
+        "\uFEFF" +
+        csvRows
+          .map((r) =>
+            r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
+          )
+          .join("\n");
+      const csvBlob = new Blob([csvContent], {
+        type: "text/csv;charset=utf-8;",
+      });
+      triggerDownloadBlob(`${cleanBase}-needle-sheet.csv`, csvBlob);
+      onShowToast(
+        vi
+          ? `Đã xuất ${dstFilename} kèm bảng màu kim ${cleanBase}-needle-sheet.csv`
+          : `Exported ${dstFilename} + ${cleanBase}-needle-sheet.csv`,
+      );
+    } else {
+      onShowToast(
+        vi
+          ? `Đã xuất file máy thêu ${dstFilename}`
+          : `Exported machine file ${dstFilename}`,
+      );
+    }
+
+    setDstDownloadPrompt(null);
   }
 
   // Construct preview EmbroideryDesign object for the live .DST inspector
@@ -159,9 +331,10 @@ function DesignsTab({
         </div>
         <button
           onClick={() => onOpenNewDesignModal()}
-          className="tv-accent-bg rounded-xl px-4 py-2 text-xs font-bold cursor-pointer"
+          className="tv-accent-bg inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold cursor-pointer"
         >
-          + {vi ? "Thêm Mẫu Thêu Thủ Công" : "Add Design Manually"}
+          <span aria-hidden="true">+</span>
+          <span>{vi ? "Thêm Mẫu Thêu Thủ Công" : "Add Design Manually"}</span>
         </button>
       </div>
 
@@ -194,35 +367,39 @@ function DesignsTab({
             <button
               type="button"
               onClick={() => handleLoadSampleDst("crest")}
-              className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1 text-[11px] font-semibold hover:opacity-85 cursor-pointer"
+              className="tv-surface-2 tv-border inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-semibold hover:opacity-85 cursor-pointer"
             >
-              🛡 Royal Crest (3 Kim)
+              <span aria-hidden="true">🛡</span>
+              <span>Royal Crest (3 Kim)</span>
             </button>
             <button
               type="button"
               onClick={() => handleLoadSampleDst("lotus")}
-              className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1 text-[11px] font-semibold hover:opacity-85 cursor-pointer"
+              className="tv-surface-2 tv-border inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-semibold hover:opacity-85 cursor-pointer"
             >
-              ✿ Saigon Lotus (3 Kim)
+              <span aria-hidden="true">✿</span>
+              <span>Saigon Lotus (3 Kim)</span>
             </button>
             <button
               type="button"
               onClick={() => handleLoadSampleDst("star")}
-              className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1 text-[11px] font-semibold hover:opacity-85 cursor-pointer"
+              className="tv-surface-2 tv-border inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-semibold hover:opacity-85 cursor-pointer"
             >
-              ★ VN Star Badge (2 Kim)
+              <span aria-hidden="true">★</span>
+              <span>VN Star Badge (2 Kim)</span>
             </button>
             <button
               type="button"
-              onClick={() => handleDownloadSampleDst("crest")}
-              className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-[11px] font-bold text-sky-400 hover:bg-sky-500/20 cursor-pointer"
+              onClick={() => openSampleDstModal("crest")}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-[11px] font-bold text-sky-400 hover:bg-sky-500/20 cursor-pointer"
               title={
                 vi
                   ? "Tải file .DST thật về máy để thử kéo thả"
                   : "Download real .DST file to your computer to test drag & drop"
               }
             >
-              ⬇ {vi ? "Tải File .DST Mẫu" : "Download .DST File"}
+              <span aria-hidden="true">⬇</span>
+              <span>{vi ? "Tải File .DST Mẫu" : "Download .DST File"}</span>
             </button>
           </div>
         </div>
@@ -494,6 +671,64 @@ function DesignsTab({
         )}
       </div>
 
+      {/* ================= DIGITIZED DESIGNS CATALOG FILTER & SEARCH BAR ================= */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-1.5">
+          {(
+            [
+              { id: "ALL" as const, label: vi ? "Tất Cả Mẫu" : "All Designs" },
+              {
+                id: "Standard" as const,
+                label: vi ? "Tiêu Chuẩn (Standard)" : "Standard",
+              },
+              {
+                id: "Detailed" as const,
+                label: vi ? "Chi Tiết Nhỏ (Detailed)" : "Detailed",
+              },
+              {
+                id: "3D Puff" as const,
+                label: vi ? "Thêu Nổi 3D (3D Puff)" : "3D Puff",
+              },
+              {
+                id: "Jacket Back" as const,
+                label: vi ? "Lưng Áo Lớn (Jacket Back)" : "Jacket Back",
+              },
+            ] as const
+          ).map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => {
+                setComplexityFilter(f.id);
+                setCurrentPage(1);
+              }}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                complexityFilter === f.id
+                  ? "tv-accent-bg border-transparent font-bold"
+                  : "tv-surface tv-border tv-text-muted hover:text-(--tv-text)"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        <input
+          type="text"
+          value={designSearch}
+          onChange={(e) => {
+            setDesignSearch(e.target.value);
+            setCurrentPage(1);
+          }}
+          placeholder={
+            vi
+              ? "Tìm theo mã .DST, tên mẫu, khách hàng..."
+              : "Search by .DST code, design name, client..."
+          }
+          className="tv-input w-full sm:w-72 px-3.5 py-2 text-xs"
+        />
+      </div>
+
       {/* ================= DIGITIZED DESIGNS CATALOG GRID ================= */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {pagedDesigns.map((des) => (
@@ -506,27 +741,27 @@ function DesignsTab({
                 <DesignHoopPreview design={des} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="font-mono text-xs font-bold tv-accent-text">
                           {des.code}
                         </span>
-                        <span className="tv-surface-2 rounded px-2 py-0.5 font-mono text-[10px] font-bold">
+                        <span className="tv-surface-2 inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md px-2 py-1 text-center font-mono text-[10px] font-bold leading-none">
                           .{des.fileFormat}
                         </span>
-                        <span className="rounded border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-[10px] font-semibold text-purple-400">
+                        <span className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-1 text-center text-[10px] font-semibold leading-none text-purple-400">
                           {des.complexity}
                         </span>
                         {des.stitchPaths && des.stitchPaths.length > 0 && (
-                          <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[9px] font-bold text-emerald-400">
+                          <span className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-center font-mono text-[9px] font-bold leading-none text-emerald-400">
                             {vi ? "Đường Kim .DST Thật" : "Vector .DST"}
                           </span>
                         )}
                       </div>
-                      <h3 className="mt-1 text-base font-bold truncate">
+                      <h3 className="mt-1 text-base font-bold truncate" title={des.name}>
                         {des.name}
                       </h3>
-                      <p className="text-xs tv-text-muted">
+                      <p className="text-xs tv-text-muted truncate">
                         {vi ? "Khách hàng:" : "Client:"} {des.clientName}
                       </p>
                     </div>
@@ -589,56 +824,45 @@ function DesignsTab({
               </div>
             </div>
 
-            <div className="tv-border mt-4 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
-              <p className="text-xs tv-text-muted truncate max-w-xs">
+            <div className="tv-border mt-4 flex items-center justify-between gap-3 border-t pt-3">
+              <p
+                className="min-w-0 flex-1 text-xs tv-text-muted truncate"
+                title={des.digitizerNotes}
+              >
                 <strong>{vi ? "Kỹ thuật:" : "Spec:"}</strong>{" "}
                 {des.digitizerNotes}
               </p>
-              <div className="flex items-center gap-1.5">
+              <div className="flex shrink-0 items-center gap-1.5">
                 <button
-                  onClick={() => {
-                    const buf = exportDesignToDstBinary(des);
-                    const blob = new Blob([buf], {
-                      type: "application/octet-stream",
-                    });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `${des.code || "TV-DESIGN"}.dst`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    onShowToast(
-                      vi
-                        ? `Đã xuất file máy thêu ${des.code}.dst`
-                        : `Exported machine file ${des.code}.dst`,
-                    );
-                  }}
-                  className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1 text-xs font-mono font-bold tv-accent-text hover:opacity-85 cursor-pointer"
+                  onClick={() => openDesignDstModal(des)}
+                  className="tv-surface-2 tv-border inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-mono font-bold tv-accent-text hover:opacity-85 cursor-pointer"
                   title={
                     vi
-                      ? "Tải file nhị phân .DST chuẩn máy Tajima/Barudan"
-                      : "Download binary Tajima .DST file for USB/Machine"
+                      ? "Tùy chọn tải hoặc kiểm tra file .DST"
+                      : "Options to download or inspect .DST file"
                   }
                 >
-                  ⬇ .DST
+                  <span aria-hidden="true">⬇</span>
+                  <span>.DST</span>
                 </button>
                 <button
                   onClick={() => {
                     onOpenNewOrderModal({ designId: des.id });
                   }}
-                  className="tv-accent-bg rounded-lg px-2.5 py-1 text-xs font-bold cursor-pointer"
+                  className="tv-accent-bg inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold cursor-pointer"
                 >
-                  + {vi ? "Tạo Đơn" : "New Order"}
+                  <span aria-hidden="true">+</span>
+                  <span>{vi ? "Tạo Đơn" : "New Order"}</span>
                 </button>
                 <button
                   onClick={() => onEditDesignModal(des)}
-                  className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1 text-xs cursor-pointer"
+                  className="tv-surface-2 tv-border inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-xs cursor-pointer"
                 >
                   {vi ? "Sửa" : "Edit"}
                 </button>
                 <button
                   onClick={() => onDeleteDesign(des.id, des.code)}
-                  className="tv-surface-2 tv-border rounded-lg border px-2 py-1 text-xs tv-text-muted hover:text-rose-400 cursor-pointer"
+                  className="tv-surface-2 tv-border inline-flex items-center justify-center rounded-lg border px-2.5 py-1.5 text-xs tv-text-muted hover:text-rose-400 cursor-pointer"
                 >
                   {vi ? "Xóa" : "Delete"}
                 </button>
@@ -652,15 +876,265 @@ function DesignsTab({
         vi={vi}
         currentPage={safePage}
         pageSize={pageSize}
-        totalItems={designs.length}
+        totalItems={filteredDesigns.length}
         pageSizeOptions={[4, 6, 10, 20]}
         unitLabel={vi ? "mẫu thêu .DST" : "designs"}
         onPageChange={setCurrentPage}
         onPageSizeChange={setPageSize}
       />
+
+      {/* ================= .DST DOWNLOAD & ACTION CONFIRMATION MODAL ================= */}
+      {dstDownloadPrompt && (
+        <div
+          onClick={() => setDstDownloadPrompt(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="tv-surface tv-border w-full max-w-lg rounded-2xl border p-6 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-3 border-b tv-border pb-3.5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="tv-accent-bg rounded-lg px-2 py-0.5 font-mono text-xs font-black">
+                    .DST
+                  </span>
+                  <h3 className="text-base font-extrabold">
+                    {dstDownloadPrompt.mode === "sample"
+                      ? vi
+                        ? "Tùy Chọn Tải Hoặc Nạp File .DST Mẫu"
+                        : "Sample .DST File Download & Action Options"
+                      : vi
+                        ? `Tùy Chọn Xuất Mẫu Thêu ${dstDownloadPrompt.design?.code}`
+                        : `Export Options for ${dstDownloadPrompt.design?.code}`}
+                  </h3>
+                </div>
+                <p className="mt-1 text-xs tv-text-muted">
+                  {vi
+                    ? "Chọn thao tác bạn muốn thực hiện với file máy thêu Tajima .DST này"
+                    : "Choose what you would like to do with this Tajima .DST machine file"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDstDownloadPrompt(null)}
+                className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1 text-xs tv-text-muted hover:opacity-85 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleConfirmDstDownloadPrompt}
+              className="mt-4 space-y-4 text-xs"
+            >
+              {/* Sample Preset Selector (only when opened from Download Sample .DST) */}
+              {dstDownloadPrompt.mode === "sample" ? (
+                <div>
+                  <label className="mb-1.5 block font-bold uppercase tracking-wider tv-text-muted text-[11px]">
+                    {vi ? "Chọn Mẫu .DST Thử Nghiệm" : "Select Sample .DST Pattern"}
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        {
+                          id: "crest" as const,
+                          label: "🛡 Royal Crest",
+                          sub: vi ? "3 Kim • Gia Huy" : "3 Needles • Crest",
+                        },
+                        {
+                          id: "lotus" as const,
+                          label: "✿ Saigon Lotus",
+                          sub: vi ? "3 Kim • Hoa Sen" : "3 Needles • Mandala",
+                        },
+                        {
+                          id: "star" as const,
+                          label: "★ VN Star",
+                          sub: vi ? "2 Kim • Ngôi Sao" : "2 Needles • Badge",
+                        },
+                      ] as const
+                    ).map((p) => {
+                      const active = dstDownloadPrompt.samplePreset === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            const sample = generateSampleDstBinary(p.id);
+                            setDstDownloadPrompt({
+                              ...dstDownloadPrompt,
+                              samplePreset: p.id,
+                              filename: sample.fileName.replace(/\.dst$/i, ""),
+                            });
+                          }}
+                          className={`rounded-xl border p-2.5 text-left transition cursor-pointer ${
+                            active
+                              ? "border-amber-400/80 bg-amber-500/10 font-bold"
+                              : "tv-surface-2 tv-border"
+                          }`}
+                        >
+                          <p className="font-bold">{p.label}</p>
+                          <p className="text-[10px] tv-text-muted">{p.sub}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                dstDownloadPrompt.design && (
+                  <div className="tv-surface-2 tv-border flex items-center justify-between rounded-xl border p-3">
+                    <div>
+                      <p className="font-bold text-sm">
+                        {dstDownloadPrompt.design.name}
+                      </p>
+                      <p className="text-[11px] tv-text-muted">
+                        {dstDownloadPrompt.design.clientName} •{" "}
+                        {dstDownloadPrompt.design.hoopSize}
+                      </p>
+                    </div>
+                    <div className="text-right font-mono">
+                      <p className="font-bold tv-accent-text">
+                        {dstDownloadPrompt.design.stitchCount.toLocaleString()}{" "}
+                        {vi ? "mũi" : "st"}
+                      </p>
+                      <p className="text-[11px] tv-text-muted">
+                        {dstDownloadPrompt.design.widthMm}×
+                        {dstDownloadPrompt.design.heightMm}mm •{" "}
+                        {dstDownloadPrompt.design.colorSequence.length}{" "}
+                        {vi ? "kim" : "needles"}
+                      </p>
+                    </div>
+                  </div>
+                )
+              )}
+
+              {/* Action Choice Radio Cards */}
+              <div>
+                <label className="mb-1.5 block font-bold uppercase tracking-wider tv-text-muted text-[11px]">
+                  {vi ? "Bạn Muốn Làm Gì?" : "What would you like to do?"}
+                </label>
+                <div className="space-y-2">
+                  {(
+                    [
+                      {
+                        id: "dst_only" as const,
+                        icon: "⬇",
+                        title: vi
+                          ? "Chỉ tải file nhị phân .DST (Dùng cho USB / Máy Thêu)"
+                          : "Download .DST Binary File Only (For USB / Embroidery Machine)",
+                        desc: vi
+                          ? "Xuất file .DST chuẩn 512-byte Header + tọa độ mũi thêu 3-byte cho máy Tajima, Barudan, Ricoma"
+                          : "Standard 512-byte ASCII header + 3-byte stitch commands for Tajima, Barudan & Ricoma machines",
+                      },
+                      {
+                        id: "dst_with_colorway_csv" as const,
+                        icon: "📋",
+                        title: vi
+                          ? "Tải file .DST + Bảng Phân Kim & Mã Chỉ (.CSV)"
+                          : "Download .DST Binary + Operator Needle Colorway Sheet (.CSV)",
+                        desc: vi
+                          ? "Tải đồng thời cả file chạy máy (.DST) và bảng hướng dẫn gắn màu chỉ theo từng kim cho thợ đứng máy"
+                          : "Downloads both the .DST machine binary and a companion CSV mapping each needle to its thread code",
+                      },
+                      {
+                        id: "load_inspector" as const,
+                        icon: "🔍",
+                        title: vi
+                          ? "Mở trực tiếp vào Trình Mô Phỏng Đường Kim (Không tải file)"
+                          : "Load into On-Screen .DST Stitch Inspector (Do Not Download)",
+                        desc: vi
+                          ? "Giải mã và phóng to đường chạy kim trực tiếp trên màn hình để kiểm tra hoặc đổi màu chỉ thử nghiệm"
+                          : "Inspect vector needle paths and test thread colorways right on screen without saving a file",
+                      },
+                    ] as const
+                  ).map((opt) => {
+                    const active = dstDownloadPrompt.action === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() =>
+                          setDstDownloadPrompt({
+                            ...dstDownloadPrompt,
+                            action: opt.id,
+                          })
+                        }
+                        className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition cursor-pointer ${
+                          active
+                            ? "border-amber-400/80 bg-amber-500/10 shadow-xs"
+                            : "tv-surface-2 tv-border hover:opacity-90"
+                        }`}
+                      >
+                        <span className="mt-0.5 text-base">{opt.icon}</span>
+                        <div className="flex-1">
+                          <p className="font-bold">{opt.title}</p>
+                          <p className="mt-0.5 text-[11px] tv-text-muted">
+                            {opt.desc}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Filename Input (when downloading) */}
+              {dstDownloadPrompt.action !== "load_inspector" && (
+                <div>
+                  <label className="mb-1 block font-bold uppercase tracking-wider tv-text-muted text-[11px]">
+                    {vi ? "Tên File .DST Khi Lưu" : "Output .DST Filename"}
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={dstDownloadPrompt.filename}
+                      onChange={(e) =>
+                        setDstDownloadPrompt({
+                          ...dstDownloadPrompt,
+                          filename: e.target.value,
+                        })
+                      }
+                      className="tv-input w-full px-3 py-2 font-mono text-xs"
+                    />
+                    <span className="tv-surface-2 tv-border rounded-lg border px-3 py-2 font-mono text-xs font-bold tv-accent-text">
+                      .dst
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Footer Buttons */}
+              <div className="tv-border flex items-center justify-end gap-2 border-t pt-3.5">
+                <button
+                  type="button"
+                  onClick={() => setDstDownloadPrompt(null)}
+                  className="tv-surface-2 tv-border rounded-xl border px-4 py-2 font-semibold hover:opacity-85 cursor-pointer"
+                >
+                  {vi ? "Hủy" : "Cancel"}
+                </button>
+                <button
+                  type="submit"
+                  className="tv-accent-bg rounded-xl px-4 py-2 font-extrabold shadow-md hover:opacity-90 cursor-pointer"
+                >
+                  {dstDownloadPrompt.action === "load_inspector"
+                    ? vi
+                      ? "🔍 Mở Vào Trình Mô Phỏng"
+                      : "🔍 Load in Inspector"
+                    : dstDownloadPrompt.action === "dst_with_colorway_csv"
+                      ? vi
+                        ? "⬇ Tải .DST + Bảng Màu Kim"
+                        : "⬇ Download .DST + CSV"
+                      : vi
+                        ? "⬇ Xác Nhận Tải .DST"
+                        : "⬇ Download .DST File"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default React.memo(DesignsTab);
-

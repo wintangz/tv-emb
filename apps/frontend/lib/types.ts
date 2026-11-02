@@ -24,6 +24,8 @@ export type MachineStatus = "RUNNING" | "IDLE" | "SETUP" | "MAINTENANCE";
 
 export type StudioRole = "ADMIN" | "SALES" | "DIGITIZER" | "OPERATOR";
 
+export type ShippingMode = "LOCAL_2_WAY" | "CHANH_XE_PICKUP";
+
 export interface SizeBreakdown {
   S: number;
   M: number;
@@ -56,12 +58,35 @@ export interface EmbroideryOrder {
   dueDate: string;
   createdAt: string;
   rushOrder: boolean;
+  is3DPuff?: boolean;
+  splitThreadFor20Heads?: boolean;
+  shippingMode?: ShippingMode;
+  shippingCost?: number;
   digitizingFee: number;
   unitPrice: number;
   totalPrice: number;
   notes: string;
   defectQuantity?: number;
   threadMetersUsed?: number;
+}
+
+export interface OrderMaterialAndProfitBreakdown {
+  colorCount: number;
+  is3dPuff: boolean;
+  splitThreadFor20Heads: boolean;
+  totalUpperThreadMeters: number;
+  theoreticalConesPerColor: number;
+  masterConesPerColor: number;
+  totalMasterConesToBuy: number;
+  totalSubConesFor20Heads: number;
+  upperThreadCost: number;
+  evaFoamCost: number;
+  consumablesCost: number;
+  shippingMode: ShippingMode;
+  shippingCost: number;
+  totalOrderDirectCost: number;
+  orderGrossProfit: number;
+  orderNetBeforeLabor: number;
 }
 
 export interface ColorStop {
@@ -143,8 +168,9 @@ export interface Customer {
 
 export type EmployeeRole =
   | "Machine Operator"
-  | "Digitizer"
   | "Trimming & QC"
+  | "Errands & Delivery"
+  | "Digitizer"
   | "Shop Supervisor"
   | "Sales & Coordinator";
 
@@ -180,9 +206,12 @@ export interface Employee {
 }
 
 export interface EmployeeCostBreakdown {
+  daysWorked: number;
   basePay: number;
+  mealAllowance: number;
   overtimePay: number;
   stitchBonus: number;
+  housingAndAttendance: number;
   allowance: number;
   totalCost: number;
   amountPaid: number;
@@ -197,7 +226,10 @@ export interface QuoteInput {
   garmentMarkupPercent: number;
   needsDigitizing: boolean;
   is3DPuff: boolean;
+  splitThreadFor20Heads?: boolean;
   rushOrder: boolean;
+  shippingMode?: ShippingMode;
+  shippingCost?: number;
 }
 
 export interface QuoteBreakdown {
@@ -213,6 +245,16 @@ export interface QuoteBreakdown {
   totalPrice: number;
   finalUnitPrice: number;
   estimatedProductionHours: number;
+  splitThreadFor20Heads?: boolean;
+  theoreticalConesPerColor: number;
+  masterConesPerColor: number;
+  totalMasterConesToBuy: number;
+  totalSubConesFor20Heads: number;
+  estimatedThreadCost: number;
+  estimatedEvaFoamCost: number;
+  estimatedConsumablesCost: number;
+  shippingCost: number;
+  estimatedOrderNetProfit: number;
 }
 
 export interface DashboardMetrics {
@@ -232,6 +274,9 @@ export interface DashboardMetrics {
   monthlyLaborCost: number;
   paidLaborCost: number;
   unpaidLaborCost: number;
+  monthlyMaterialCost?: number;
+  monthlyConsumablesCost?: number;
+  monthlyShippingCost?: number;
   estimatedNetProfit: number;
 }
 

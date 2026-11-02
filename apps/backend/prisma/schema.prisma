@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id                String   @id
+  name              String
+  company           String
+  email             String
+  phone             String
+  totalOrders       Int      @default(0)
+  totalSpend        Float    @default(0)
+  preferredGarments String
+  notes             String   @default("")
+  updatedAt         DateTime @updatedAt
+}
+
+model EmbroideryDesign {
+  id             String   @id
+  code           String
+  name           String
+  clientName     String
+  stitchCount    Int
+  widthMm        Float
+  heightMm       Float
+  colorSequence  Json
+  hoopSize       String
+  fileFormat     String
+  complexity     String
+  digitizerNotes String
+  createdAt      String
+  jumpCount      Int?
+  trimCount      Int?
+  stitchPaths    Json?
+  rawDstBase64   String?
+  updatedAt      DateTime @updatedAt
+}
+
+model EmbroideryMachine {
+  id                  String   @id
+  name                String
+  brand               String
+  model               String
+  heads               Int
+  needlesPerHead      Int
+  status              String
+  currentSpm          Int
+  maxSpm              Int
+  activeOrderId       String?
+  activeOrderNumber   String?
+  progressPercent     Int      @default(0)
+  totalStitchesToday  Int      @default(0)
+  threadBreaksToday   Int      @default(0)
+  lastMaintenanceDate String   @default("2026-10-15")
+  updatedAt           DateTime @updatedAt
+}
+
+model EmbroideryOrder {
+  id                String   @id
+  orderNumber       String
+  customerId        String
+  customerName      String
+  companyName       String
+  designId          String
+  designName        String
+  garmentType       String
+  garmentColor      String
+  placement         String
+  quantity          Int
+  completedQuantity Int      @default(0)
+  defectQuantity    Int      @default(0)
+  threadMetersUsed  Int      @default(0)
+  sizeBreakdown     Json?
+  stitchCount       Int
+  colorCount        Int
+  threadColors      Json
+  status            String
+  paymentStatus     String?
+  amountPaid        Float?
+  assignedMachineId String?
+  dueDate           String
+  rushOrder         Boolean  @default(false)
+  digitizingFee     Float    @default(0)
+  unitPrice         Float
+  totalPrice        Float
+  notes             String   @default("")
+  createdAt         String
+  updatedAt         DateTime @updatedAt
+}
+
+model InventoryItem {
+  id           String   @id
+  sku          String
+  name         String
+  category     String
+  brand        String
+  colorCode    String?
+  colorHex     String?
+  material     String
+  quantity     Int
+  unit         String
+  minThreshold Int
+  unitCost     Float
+  updatedAt    DateTime @updatedAt
+}
+
+model Employee {
+  id                      String   @id
+  code                    String
+  name                    String
+  role                    String
+  shift                   String
+  status                  String
+  phone                   String
+  assignedMachineId       String?
+  payType                 String
+  hourlyRate              Float
+  monthlyBaseSalary       Float
+  hoursWorkedMonth        Float
+  overtimeHoursMonth      Float
+  stitchesCompletedMonth  Int
+  stitchBonusPer10k       Float
+  allowanceAndBonus       Float
+  paymentStatus           String
+  amountPaidMonth         Float
+  joinedDate              String
+  notes                   String   @default("")
+  updatedAt               DateTime @updatedAt
+}
+

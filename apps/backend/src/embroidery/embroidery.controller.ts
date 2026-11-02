@@ -37,9 +37,7 @@ export class EmbroideryController {
   }
 
   @Post('import')
-  importDatabase(
-    @Body() body: Partial<EmbroideryDatabase>,
-  ): DashboardPayload {
+  importDatabase(@Body() body: Partial<EmbroideryDatabase>): DashboardPayload {
     return this.embroideryService.importDatabase(body);
   }
 
@@ -162,7 +160,10 @@ export class EmbroideryController {
   }
 
   @Delete('inventory/:id')
-  deleteInventoryItem(@Param('id') id: string): { deleted: boolean; id: string } {
+  deleteInventoryItem(@Param('id') id: string): {
+    deleted: boolean;
+    id: string;
+  } {
     return this.embroideryService.deleteInventoryItem(id);
   }
 

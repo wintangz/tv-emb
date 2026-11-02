@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import type { StudioLocale } from "@/lib/i18n";
 
 export interface ThemeConfig {
@@ -27,9 +27,9 @@ export const THEME_PRESETS: ThemeConfig[] = [
     bg: "#090d16",
     surface: "#111827",
     surface2: "#1e293b",
-    border: "#1f2937",
+    border: "#334155",
     text: "#f8fafc",
-    textMuted: "#94a3b8",
+    textMuted: "#cbd5e1",
     accent: "#f59e0b",
     accentFg: "#090d16",
     radius: "0.75rem",
@@ -41,12 +41,12 @@ export const THEME_PRESETS: ThemeConfig[] = [
     mode: "dark",
     bg: "#06110e",
     surface: "#0d1f1a",
-    surface2: "#152e27",
-    border: "#1c3d34",
+    surface2: "#16332b",
+    border: "#28594b",
     text: "#ecfdf5",
-    textMuted: "#86efac",
+    textMuted: "#a7f3d0",
     accent: "#10b981",
-    accentFg: "#051b14",
+    accentFg: "#041a13",
     radius: "0.75rem",
     layout: "sidebar",
   },
@@ -56,10 +56,10 @@ export const THEME_PRESETS: ThemeConfig[] = [
     mode: "dark",
     bg: "#090b16",
     surface: "#121629",
-    surface2: "#1b213d",
-    border: "#252d52",
+    surface2: "#1e2544",
+    border: "#364275",
     text: "#f1f5f9",
-    textMuted: "#94a3b8",
+    textMuted: "#cbd5e1",
     accent: "#6366f1",
     accentFg: "#ffffff",
     radius: "0.75rem",
@@ -71,10 +71,10 @@ export const THEME_PRESETS: ThemeConfig[] = [
     mode: "dark",
     bg: "#13090c",
     surface: "#1f1116",
-    surface2: "#2e1921",
-    border: "#3d222c",
+    surface2: "#301a22",
+    border: "#542d3c",
     text: "#fff1f2",
-    textMuted: "#fda4af",
+    textMuted: "#fecdd3",
     accent: "#f43f5e",
     accentFg: "#ffffff",
     radius: "0.75rem",
@@ -84,12 +84,12 @@ export const THEME_PRESETS: ThemeConfig[] = [
     presetId: "atelier-daylight",
     name: "Atelier Daylight",
     mode: "light",
-    bg: "#f1f5f9",
+    bg: "#e2e8f0",
     surface: "#ffffff",
-    surface2: "#f8fafc",
-    border: "#e2e8f0",
+    surface2: "#eef2f6",
+    border: "#cbd5e1",
     text: "#0f172a",
-    textMuted: "#64748b",
+    textMuted: "#475569",
     accent: "#2563eb",
     accentFg: "#ffffff",
     radius: "0.75rem",
@@ -99,13 +99,13 @@ export const THEME_PRESETS: ThemeConfig[] = [
     presetId: "warm-linen",
     name: "Warm Linen & Gold",
     mode: "light",
-    bg: "#f7f4ef",
+    bg: "#ede7de",
     surface: "#ffffff",
-    surface2: "#efeae1",
-    border: "#e2d9c8",
+    surface2: "#f3efe8",
+    border: "#d6cbb9",
     text: "#1c1917",
-    textMuted: "#78716c",
-    accent: "#d97706",
+    textMuted: "#57534e",
+    accent: "#b45309",
     accentFg: "#ffffff",
     radius: "0.75rem",
     layout: "sidebar",
@@ -115,15 +115,15 @@ export const THEME_PRESETS: ThemeConfig[] = [
 const THREAD_ACCENT_SWATCHES = [
   { name: "Vàng Kim (Gold)", hex: "#f59e0b", fg: "#090d16" },
   { name: "Ngọc Lục Bảo (Jade)", hex: "#10b981", fg: "#051b14" },
-  { name: "Xanh Hoàng Gia", hex: "#3b82f6", fg: "#ffffff" },
-  { name: "Chàm Indigo", hex: "#6366f1", fg: "#ffffff" },
-  { name: "Đỏ Nhung (Crimson)", hex: "#f43f5e", fg: "#ffffff" },
-  { name: "Xanh Ngọc (Cyan)", hex: "#06b6d4", fg: "#082f49" },
-  { name: "Tím Thạch Anh", hex: "#a855f7", fg: "#ffffff" },
+  { name: "Xanh Hoàng Gia", hex: "#2563eb", fg: "#ffffff" },
+  { name: "Chàm Indigo", hex: "#4f46e5", fg: "#ffffff" },
+  { name: "Đỏ Nhung (Crimson)", hex: "#e11d48", fg: "#ffffff" },
+  { name: "Xanh Ngọc (Cyan)", hex: "#0891b2", fg: "#ffffff" },
+  { name: "Tím Thạch Anh", hex: "#9333ea", fg: "#ffffff" },
   { name: "Đồng Đỏ (Copper)", hex: "#ea580c", fg: "#ffffff" },
 ];
 
-const THEME_STORAGE_KEY = "tuong_vinh_theme_v1";
+const THEME_STORAGE_KEY = "tuong_vinh_theme_v2";
 let currentThemeSnapshot: ThemeConfig = THEME_PRESETS[0];
 let initializedFromStorage = false;
 const listeners = new Set<() => void>();
@@ -131,6 +131,7 @@ const listeners = new Set<() => void>();
 export function applyThemeToDocument(theme: ThemeConfig) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
+  root.setAttribute("data-theme-mode", theme.mode);
   root.style.setProperty("--tv-bg", theme.bg);
   root.style.setProperty("--tv-surface", theme.surface);
   root.style.setProperty("--tv-surface-2", theme.surface2);
@@ -148,7 +149,17 @@ function getThemeSnapshot(): ThemeConfig {
     try {
       const raw = localStorage.getItem(THEME_STORAGE_KEY);
       if (raw) {
-        currentThemeSnapshot = JSON.parse(raw) as ThemeConfig;
+        const parsed = JSON.parse(raw) as ThemeConfig;
+        const matchedPreset = THEME_PRESETS.find(
+          (p) => p.presetId === parsed.presetId,
+        );
+        currentThemeSnapshot = matchedPreset
+          ? {
+              ...matchedPreset,
+              layout: parsed.layout ?? matchedPreset.layout,
+              radius: parsed.radius ?? matchedPreset.radius,
+            }
+          : parsed;
       }
     } catch {
       // ignore storage errors
@@ -209,6 +220,16 @@ export default function ThemeCustomizer({
 }: ThemeCustomizerProps) {
   const vi = locale === "vi";
 
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   function selectPreset(preset: ThemeConfig) {
     onChange({
       ...preset,
@@ -218,28 +239,40 @@ export default function ThemeCustomizer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs">
-      <div className="tv-surface tv-border flex h-full w-full max-w-md flex-col justify-between border-l p-6 shadow-2xl overflow-y-auto">
-        <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b tv-border pb-4">
-            <div>
-              <span className="tv-accent-text text-[11px] font-bold uppercase tracking-widest">
-                {vi ? "Tùy Chỉnh Giao Diện" : "Studio Personalization"}
-              </span>
-              <h3 className="text-lg font-bold tv-text">
-                {vi
-                  ? "Màu Sắc & Bố Cục Hệ Thống"
-                  : "Theme & Layout Customizer"}
-              </h3>
-            </div>
-            <button
-              onClick={onClose}
-              className="tv-input px-3 py-1.5 text-xs font-semibold tv-text-muted hover:opacity-80 cursor-pointer"
-            >
-              ✕ {vi ? "Đóng" : "Close"}
-            </button>
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex justify-end bg-black/55 backdrop-blur-xs transition-opacity"
+      role="dialog"
+      aria-modal="true"
+      aria-label={vi ? "Tùy chỉnh giao diện" : "Theme customizer"}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="tv-surface tv-border flex h-full w-full max-w-md flex-col justify-between border-l shadow-2xl overflow-y-auto"
+      >
+        {/* Sticky Header so Close is always 1 click away */}
+        <div className="tv-surface tv-border sticky top-0 z-10 flex items-center justify-between border-b px-6 py-4">
+          <div>
+            <span className="tv-accent-text text-[10px] font-bold uppercase tracking-widest">
+              {vi ? "Tùy Chỉnh Giao Diện" : "Studio Personalization"}
+            </span>
+            <h3 className="text-base font-bold tv-text">
+              {vi
+                ? "Màu Sắc & Bố Cục Hệ Thống"
+                : "Theme & Layout Customizer"}
+            </h3>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            title={vi ? "Đóng bảng tùy chỉnh (Esc)" : "Close panel (Esc)"}
+            className="tv-surface-2 tv-border flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-bold tv-text hover:opacity-80 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="space-y-6 p-6">
 
           {/* 1. Theme Presets */}
           <div>
@@ -257,8 +290,8 @@ export default function ThemeCustomizer({
                     onClick={() => selectPreset(preset)}
                     className={`flex items-center gap-3 rounded-xl border p-3 text-left transition cursor-pointer ${
                       isSelected
-                        ? "ring-2 ring-[var(--tv-accent)] border-transparent"
-                        : "opacity-85 hover:opacity-100"
+                        ? "ring-2 ring-(--tv-accent) border-transparent"
+                        : "opacity-90 hover:opacity-100"
                     }`}
                     style={{
                       backgroundColor: preset.surface,
@@ -268,11 +301,11 @@ export default function ThemeCustomizer({
                   >
                     <div className="flex -space-x-1.5 shrink-0">
                       <span
-                        className="h-5 w-5 rounded-full border border-white/20"
+                        className="h-5 w-5 rounded-full border border-slate-400/40"
                         style={{ backgroundColor: preset.bg }}
                       />
                       <span
-                        className="h-5 w-5 rounded-full border border-white/20"
+                        className="h-5 w-5 rounded-full border border-slate-400/40"
                         style={{ backgroundColor: preset.accent }}
                       />
                     </div>
@@ -320,7 +353,7 @@ export default function ThemeCustomizer({
                   }
                   className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition cursor-pointer ${
                     theme.accent.toLowerCase() === sw.hex.toLowerCase()
-                      ? "tv-accent-border ring-1 ring-[var(--tv-accent)]"
+                      ? "tv-accent-border ring-1 ring-(--tv-accent)"
                       : "tv-border"
                   }`}
                 >
@@ -426,7 +459,7 @@ export default function ThemeCustomizer({
                   className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition cursor-pointer ${
                     theme.layout === opt.id
                       ? "tv-accent-bg font-bold"
-                      : "tv-border tv-surface-2 tv-text-muted"
+                      : "tv-border tv-surface-2 tv-text"
                   }`}
                 >
                   {opt.label}
@@ -454,7 +487,7 @@ export default function ThemeCustomizer({
                   className={`rounded-lg border py-2 text-xs font-semibold transition cursor-pointer ${
                     theme.radius === r.val
                       ? "tv-accent-bg font-bold"
-                      : "tv-border tv-surface-2 tv-text-muted"
+                      : "tv-border tv-surface-2 tv-text"
                   }`}
                 >
                   {r.label}
@@ -464,9 +497,10 @@ export default function ThemeCustomizer({
           </div>
         </div>
 
-        {/* Footer Reset */}
-        <div className="mt-6 flex items-center justify-between border-t tv-border pt-4">
+        {/* Sticky Footer Reset */}
+        <div className="tv-surface tv-border sticky bottom-0 z-10 flex items-center justify-between border-t px-6 py-4">
           <button
+            type="button"
             onClick={() => onChange(THEME_PRESETS[0])}
             className="text-xs tv-text-muted hover:underline cursor-pointer"
           >
@@ -475,10 +509,11 @@ export default function ThemeCustomizer({
               : "Reset to Default (Imperial Gold)"}
           </button>
           <button
+            type="button"
             onClick={onClose}
-            className="tv-accent-bg rounded-xl px-5 py-2 text-xs font-bold shadow-lg cursor-pointer"
+            className="tv-accent-bg rounded-xl px-5 py-2 text-xs font-bold shadow-md cursor-pointer"
           >
-            {vi ? "Hoàn Tất" : "Done"}
+            {vi ? "Đóng (Esc)" : "Done (Esc)"}
           </button>
         </div>
       </div>

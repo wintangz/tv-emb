@@ -32,47 +32,48 @@ export const ORDER_STAGE_FLOW: OrderStatus[] = [
   "DELIVERED",
 ];
 
+const BADGE_BASE =
+  "inline-flex shrink-0 items-center justify-center whitespace-nowrap text-center leading-none";
+
 export const STATUS_BADGE_STYLES: Record<OrderStatus, string> = {
-  QUOTE: "bg-slate-500/15 text-slate-400 border-slate-500/30",
-  DIGITIZING: "bg-purple-500/15 text-purple-400 border-purple-500/35",
-  APPROVAL_PENDING: "bg-amber-500/15 text-amber-400 border-amber-500/35",
-  IN_PRODUCTION: "bg-sky-500/15 text-sky-400 border-sky-500/35",
-  QUALITY_CHECK: "bg-indigo-500/15 text-indigo-400 border-indigo-500/35",
-  COMPLETED: "bg-emerald-500/15 text-emerald-400 border-emerald-500/35",
-  DELIVERED: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
+  QUOTE: `${BADGE_BASE} bg-slate-500/15 text-slate-400 border-slate-500/30`,
+  DIGITIZING: `${BADGE_BASE} bg-purple-500/15 text-purple-400 border-purple-500/35`,
+  APPROVAL_PENDING: `${BADGE_BASE} bg-amber-500/15 text-amber-400 border-amber-500/35`,
+  IN_PRODUCTION: `${BADGE_BASE} bg-sky-500/15 text-sky-400 border-sky-500/35`,
+  QUALITY_CHECK: `${BADGE_BASE} bg-indigo-500/15 text-indigo-400 border-indigo-500/35`,
+  COMPLETED: `${BADGE_BASE} bg-emerald-500/15 text-emerald-400 border-emerald-500/35`,
+  DELIVERED: `${BADGE_BASE} bg-zinc-500/15 text-zinc-400 border-zinc-500/30`,
 };
 
 export const PAYMENT_BADGE_STYLES: Record<PaymentStatus, string> = {
-  PAID: "bg-emerald-500/15 text-emerald-400 border-emerald-500/35",
-  DEPOSIT_PAID: "bg-amber-500/15 text-amber-400 border-amber-500/35",
-  UNPAID: "bg-rose-500/15 text-rose-400 border-rose-500/35",
+  PAID: `${BADGE_BASE} bg-emerald-500/15 text-emerald-400 border-emerald-500/35`,
+  DEPOSIT_PAID: `${BADGE_BASE} bg-amber-500/15 text-amber-400 border-amber-500/35`,
+  UNPAID: `${BADGE_BASE} bg-rose-500/15 text-rose-400 border-rose-500/35`,
 };
 
 export const MACHINE_BADGE_STYLES: Record<MachineStatus, string> = {
-  RUNNING: "bg-emerald-500/15 text-emerald-400 border-emerald-500/40",
-  IDLE: "bg-slate-500/15 text-slate-400 border-slate-500/30",
-  SETUP: "bg-amber-500/15 text-amber-400 border-amber-500/40",
-  MAINTENANCE: "bg-rose-500/15 text-rose-400 border-rose-500/40",
+  RUNNING: `${BADGE_BASE} bg-emerald-500/15 text-emerald-400 border-emerald-500/40`,
+  IDLE: `${BADGE_BASE} bg-slate-500/15 text-slate-400 border-slate-500/30`,
+  SETUP: `${BADGE_BASE} bg-amber-500/15 text-amber-400 border-amber-500/40`,
+  MAINTENANCE: `${BADGE_BASE} bg-rose-500/15 text-rose-400 border-rose-500/40`,
 };
 
 export const EMPLOYEE_STATUS_BADGE_STYLES: Record<EmployeeStatus, string> = {
-  ACTIVE: "bg-emerald-500/15 text-emerald-400 border-emerald-500/40",
-  ON_LEAVE: "bg-amber-500/15 text-amber-400 border-amber-500/40",
-  OFF_SHIFT: "bg-slate-500/15 text-slate-400 border-slate-500/30",
+  ACTIVE: `${BADGE_BASE} bg-emerald-500/15 text-emerald-400 border-emerald-500/40`,
+  ON_LEAVE: `${BADGE_BASE} bg-amber-500/15 text-amber-400 border-amber-500/40`,
+  OFF_SHIFT: `${BADGE_BASE} bg-slate-500/15 text-slate-400 border-slate-500/30`,
 };
 
 export const SALARY_BADGE_STYLES: Record<SalaryPaymentStatus, string> = {
-  PAID: "bg-emerald-500/15 text-emerald-400 border-emerald-500/35",
-  PARTIAL_ADVANCE: "bg-amber-500/15 text-amber-400 border-amber-500/35",
-  UNPAID: "bg-rose-500/15 text-rose-400 border-rose-500/35",
+  PAID: `${BADGE_BASE} bg-emerald-500/15 text-emerald-400 border-emerald-500/35`,
+  PARTIAL_ADVANCE: `${BADGE_BASE} bg-amber-500/15 text-amber-400 border-amber-500/35`,
+  UNPAID: `${BADGE_BASE} bg-rose-500/15 text-rose-400 border-rose-500/35`,
 };
 
 export const EMPLOYEE_ROLES: EmployeeRole[] = [
   "Machine Operator",
-  "Digitizer",
   "Trimming & QC",
-  "Shop Supervisor",
-  "Sales & Coordinator",
+  "Errands & Delivery",
 ];
 
 export const PLACEMENTS: GarmentPlacement[] = [
@@ -108,6 +109,9 @@ export interface OrderFormState {
   assignedMachineId: string;
   dueDate: string;
   rushOrder: boolean;
+  is3DPuff?: boolean;
+  shippingMode?: "LOCAL_2_WAY" | "CHANH_XE_PICKUP";
+  shippingCost?: number;
   notes: string;
 }
 

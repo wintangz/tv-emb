@@ -30,6 +30,8 @@ export interface SizeBreakdown {
   XXL: number;
 }
 
+export type ShippingMode = 'LOCAL_2_WAY' | 'CHANH_XE_PICKUP';
+
 export interface EmbroideryOrder {
   id: string;
   orderNumber: string;
@@ -54,6 +56,10 @@ export interface EmbroideryOrder {
   dueDate: string;
   createdAt: string;
   rushOrder: boolean;
+  is3DPuff?: boolean;
+  splitThreadFor20Heads?: boolean;
+  shippingMode?: ShippingMode;
+  shippingCost?: number;
   digitizingFee: number;
   unitPrice: number;
   totalPrice: number;
@@ -141,8 +147,9 @@ export interface Customer {
 
 export type EmployeeRole =
   | 'Machine Operator'
-  | 'Digitizer'
   | 'Trimming & QC'
+  | 'Errands & Delivery'
+  | 'Digitizer'
   | 'Shop Supervisor'
   | 'Sales & Coordinator';
 
@@ -185,7 +192,10 @@ export interface QuoteInput {
   garmentMarkupPercent: number;
   needsDigitizing: boolean;
   is3DPuff: boolean;
+  splitThreadFor20Heads?: boolean;
   rushOrder: boolean;
+  shippingMode?: ShippingMode;
+  shippingCost?: number;
 }
 
 export interface QuoteBreakdown {
@@ -201,6 +211,19 @@ export interface QuoteBreakdown {
   totalPrice: number;
   finalUnitPrice: number;
   estimatedProductionHours: number;
+  splitThreadFor20Heads?: boolean;
+  theoreticalConesPerColor?: number;
+  masterConesPerColor?: number;
+  totalMasterConesToBuy?: number;
+  totalSubConesFor20Heads?: number;
+  upperThreadCost?: number;
+  evaFoamCost?: number;
+  consumablesCost?: number;
+  estimatedThreadCost?: number;
+  estimatedEvaFoamCost?: number;
+  estimatedConsumablesCost?: number;
+  shippingCost?: number;
+  estimatedOrderNetProfit?: number;
 }
 
 export interface DashboardMetrics {
@@ -220,6 +243,9 @@ export interface DashboardMetrics {
   monthlyLaborCost: number;
   paidLaborCost: number;
   unpaidLaborCost: number;
+  monthlyMaterialCost?: number;
+  monthlyConsumablesCost?: number;
+  monthlyShippingCost?: number;
   estimatedNetProfit: number;
 }
 

@@ -8,4 +8,3 @@ import { EmbroideryService } from './embroidery.service.js';
   exports: [EmbroideryService],
 })
 export class EmbroideryModule {}
-

@@ -3,5 +3,7 @@ node_modules/
 .next/
 dist/
 .DS_Store
-.env*.local
+.env
+.env.*
+!.env.example
 apps/backend/data/

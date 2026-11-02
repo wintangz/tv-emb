@@ -9,6 +9,7 @@ import type {
   OrderStatus,
   PaymentStatus,
 } from "@/lib/types";
+import { calculateOrderMaterialAndProfit } from "@/lib/seed-data";
 import { formatVnd, formatVndCompact } from "@/lib/currency";
 import PaginationBar from "../PaginationBar";
 import {
@@ -94,10 +95,10 @@ function WorkOrdersTab({
                 onChangeStatusFilter(st);
                 setCurrentPage(1);
               }}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+              className={`inline-flex items-center justify-center whitespace-nowrap rounded-lg border px-3 py-1.5 text-center text-xs font-semibold leading-none transition cursor-pointer ${
                 orderStatusFilter === st
-                  ? "tv-accent-bg font-bold"
-                  : "tv-surface tv-border border tv-text-muted"
+                  ? "tv-accent-bg border-transparent font-bold"
+                  : "tv-surface tv-border tv-text"
               }`}
             >
               {st === "ALL"
@@ -111,22 +112,28 @@ function WorkOrdersTab({
 
         <div className="flex flex-wrap items-center gap-2">
           {/* View Switcher: List vs Kanban */}
-          <div className="tv-surface tv-border flex rounded-lg border p-0.5">
+          <div className="tv-surface-2 tv-border inline-flex items-center gap-1 rounded-xl border p-1">
             <button
               onClick={() => onChangeViewMode("list")}
-              className={`rounded-md px-2.5 py-1 text-xs font-semibold cursor-pointer ${
-                ordersViewMode === "list" ? "tv-accent-bg" : "tv-text-muted"
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                ordersViewMode === "list"
+                  ? "tv-accent-bg font-bold shadow-xs"
+                  : "tv-surface tv-border border tv-text hover:opacity-90"
               }`}
             >
-              ☰ {vi ? "Danh Sách" : "List"}
+              <span aria-hidden="true">☰</span>
+              <span>{vi ? "Danh Sách" : "List"}</span>
             </button>
             <button
               onClick={() => onChangeViewMode("kanban")}
-              className={`rounded-md px-2.5 py-1 text-xs font-semibold cursor-pointer ${
-                ordersViewMode === "kanban" ? "tv-accent-bg" : "tv-text-muted"
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                ordersViewMode === "kanban"
+                  ? "tv-accent-bg font-bold shadow-xs"
+                  : "tv-surface tv-border border tv-text hover:opacity-90"
               }`}
             >
-              ⊞ {vi ? "Bảng chuyền (Kanban)" : "Kanban Board"}
+              <span aria-hidden="true">⊞</span>
+              <span>{vi ? "Bảng chuyền (Kanban)" : "Kanban Board"}</span>
             </button>
           </div>
 
@@ -165,53 +172,68 @@ function WorkOrdersTab({
                   </span>
                 </div>
                 <div className="space-y-2.5">
-                  {stageOrders.map((order) => (
-                    <div
-                      key={order.id}
-                      className="tv-surface-2 tv-border rounded-xl border p-3 space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-xs font-bold tv-accent-text">
-                          {order.orderNumber}
-                        </span>
-                        {order.rushOrder && (
-                          <span className="rounded bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold text-rose-400">
-                            {vi ? "GẤP" : "RUSH"}
+                  {stageOrders.map((order) => {
+                    const stageIdx = ORDER_STAGE_FLOW.indexOf(order.status);
+                    const nextStage =
+                      stageIdx >= 0 && stageIdx < ORDER_STAGE_FLOW.length - 1
+                        ? ORDER_STAGE_FLOW[stageIdx + 1]
+                        : null;
+                    return (
+                      <div
+                        key={order.id}
+                        className="tv-surface-2 tv-border rounded-xl border p-3 space-y-2"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-xs font-bold tv-accent-text">
+                            {order.orderNumber}
                           </span>
-                        )}
+                          {order.rushOrder && (
+                            <span className="rounded bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold text-rose-400">
+                              {vi ? "GẤP" : "RUSH"}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-bold leading-snug">
+                          {order.companyName}
+                        </p>
+                        <p className="text-[11px] tv-text-muted">
+                          {order.quantity} {vi ? "cái" : "pcs"} •{" "}
+                          {canViewFinancials ? (
+                            <span className="font-mono text-emerald-400">
+                              {formatVndCompact(order.totalPrice, vi)}
+                            </span>
+                          ) : (
+                            <span className="font-mono tv-accent-text">
+                              {order.stitchCount.toLocaleString()}{" "}
+                              {vi ? "mũi" : "st"}
+                            </span>
+                          )}
+                        </p>
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          <button
+                            onClick={() => onOpenJobTicket(order)}
+                            className="tv-surface tv-border inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-semibold tv-text hover:opacity-90 cursor-pointer"
+                          >
+                            <span aria-hidden="true">📄</span>
+                            <span>{vi ? "Lệnh SX" : "Job Ticket"}</span>
+                          </button>
+                          {nextStage && (
+                            <button
+                              onClick={() => onAdvanceOrderStatus(order)}
+                              title={
+                                vi
+                                  ? `Chuyển công đoạn: ${statusLabels[nextStage]}`
+                                  : `Advance stage: ${statusLabels[nextStage]}`
+                              }
+                              className="tv-accent-bg inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-bold cursor-pointer"
+                            >
+                              {vi ? "Chuyển Công Đoạn →" : "Advance Stage →"}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-xs font-bold leading-snug">
-                        {order.companyName}
-                      </p>
-                      <p className="text-[11px] tv-text-muted">
-                        {order.quantity} {vi ? "cái" : "pcs"} •{" "}
-                        {canViewFinancials ? (
-                          <span className="font-mono text-emerald-400">
-                            {formatVndCompact(order.totalPrice, vi)}
-                          </span>
-                        ) : (
-                          <span className="font-mono tv-accent-text">
-                            {order.stitchCount.toLocaleString()}{" "}
-                            {vi ? "mũi" : "st"}
-                          </span>
-                        )}
-                      </p>
-                      <div className="flex items-center justify-between pt-1">
-                        <button
-                          onClick={() => onOpenJobTicket(order)}
-                          className="text-[11px] tv-text-muted hover:underline cursor-pointer"
-                        >
-                          🖨 {vi ? "Phiếu SX" : "Ticket"}
-                        </button>
-                        <button
-                          onClick={() => onAdvanceOrderStatus(order)}
-                          className="tv-accent-bg rounded px-2 py-0.5 text-[10px] font-bold cursor-pointer"
-                        >
-                          {vi ? "Tiếp →" : "Next →"}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {stageOrders.length === 0 && (
                     <p className="py-6 text-center text-[11px] tv-text-muted">
                       {vi ? "Không có đơn ở khâu này" : "No orders in stage"}
@@ -234,16 +256,24 @@ function WorkOrdersTab({
             const machine = order.assignedMachineId
               ? machineById.get(order.assignedMachineId)
               : undefined;
+            const stageIdx = ORDER_STAGE_FLOW.indexOf(order.status);
+            const nextStage =
+              stageIdx >= 0 && stageIdx < ORDER_STAGE_FLOW.length - 1
+                ? ORDER_STAGE_FLOW[stageIdx + 1]
+                : null;
+            const mat = calculateOrderMaterialAndProfit(order);
+
             return (
-              <div key={order.id} className="tv-card p-4">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-1.5">
+              <div key={order.id} className="tv-card p-4 space-y-3">
+                {/* Top Row: Order Identity & Notes (Left) + 3-Column Metrics Box (Right) */}
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 flex-1 space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-bold tv-accent-text">
                         {order.orderNumber}
                       </span>
                       <span
-                        className={`rounded-md border px-2.5 py-0.5 text-xs font-semibold ${
+                        className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
                           STATUS_BADGE_STYLES[order.status]
                         }`}
                       >
@@ -251,7 +281,7 @@ function WorkOrdersTab({
                       </span>
                       {canViewFinancials && (
                         <span
-                          className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
+                          className={`rounded-md border px-2.5 py-1 text-[11px] font-semibold ${
                             PAYMENT_BADGE_STYLES[order.paymentStatus ?? "UNPAID"]
                           }`}
                         >
@@ -261,22 +291,25 @@ function WorkOrdersTab({
                         </span>
                       )}
                       {(order.defectQuantity ?? 0) > 0 && (
-                        <span className="rounded-md bg-rose-500/15 border border-rose-500/35 px-2 py-0.5 text-[11px] font-bold text-rose-400">
-                          ⚠ {order.defectQuantity}{" "}
-                          {vi ? "áo lỗi QC" : "defects"}
+                        <span className="inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-rose-500/15 border border-rose-500/35 px-2.5 py-1 text-center text-[11px] font-bold leading-none text-rose-400">
+                          <span aria-hidden="true">⚠</span>
+                          <span>
+                            {order.defectQuantity}{" "}
+                            {vi ? "áo lỗi QC" : "defects"}
+                          </span>
                         </span>
                       )}
                       {order.rushOrder && (
-                        <span className="rounded-md bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 text-[11px] font-bold text-rose-400">
+                        <span className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md bg-rose-500/20 border border-rose-500/40 px-2.5 py-1 text-center text-[11px] font-bold leading-none text-rose-400">
                           {vi ? "ĐƠN GẤP" : "RUSH ORDER"}
                         </span>
                       )}
-                      <span className="tv-surface-2 rounded-md px-2 py-0.5 text-xs tv-text-muted">
+                      <span className="tv-surface-2 inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md px-2.5 py-1 text-center text-xs leading-none tv-text-muted">
                         {vi ? "Vị trí:" : "Placement:"}{" "}
                         {placementLabels[order.placement]}
                       </span>
                       {machine && (
-                        <span className="rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-xs text-emerald-400">
+                        <span className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-center text-xs leading-none text-emerald-400">
                           {machine.name}
                         </span>
                       )}
@@ -299,17 +332,18 @@ function WorkOrdersTab({
                     </p>
 
                     {order.notes && (
-                      <p className="text-xs italic tv-text-muted">
+                      <p className="text-xs italic tv-text-muted leading-relaxed">
                         {vi ? "Ghi chú xưởng:" : "Shop Note:"} &ldquo;
                         {order.notes}&rdquo;
                       </p>
                     )}
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-5">
-                    <div className="text-right">
-                      <p className="text-xs tv-text-muted">
-                        {vi ? "Số Mũi / Sản Phẩm" : "Stitches / Piece"}
+                  {/* Compact Right Metrics Box */}
+                  <div className="tv-surface-2 tv-border grid grid-cols-3 gap-4 shrink-0 rounded-xl border px-4 py-2.5 text-right">
+                    <div>
+                      <p className="text-[11px] tv-text-muted whitespace-nowrap">
+                        {vi ? "Số Mũi / SP" : "Stitches / Pc"}
                       </p>
                       <p className="font-mono text-sm font-bold">
                         {order.stitchCount.toLocaleString()}{" "}
@@ -319,22 +353,22 @@ function WorkOrdersTab({
                         {order.threadColors.map((hex, idx) => (
                           <span
                             key={idx}
-                            className="h-3.5 w-3.5 rounded-full border border-slate-500"
+                            className="h-3 w-3 rounded-full border border-slate-500"
                             style={{ backgroundColor: hex }}
                           />
                         ))}
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <p className="text-xs tv-text-muted">
-                        {vi ? "Số Lượng" : "Quantity"}
+                    <div className="border-l tv-border pl-4">
+                      <p className="text-[11px] tv-text-muted whitespace-nowrap">
+                        {vi ? "Tiến Độ SL" : "Quantity"}
                       </p>
-                      <p className="font-mono text-sm font-bold">
+                      <p className="font-mono text-sm font-bold whitespace-nowrap">
                         {order.completedQuantity} / {order.quantity}{" "}
                         {vi ? "cái" : "pcs"}
                       </p>
-                      <div className="tv-surface-2 mt-1 h-1.5 w-24 overflow-hidden rounded-full">
+                      <div className="tv-surface mt-1.5 ml-auto h-1.5 w-20 overflow-hidden rounded-full">
                         <div
                           className="h-full"
                           style={{
@@ -346,86 +380,165 @@ function WorkOrdersTab({
                     </div>
 
                     {canViewFinancials ? (
-                      <div className="text-right">
-                        <p className="text-xs tv-text-muted">
-                          {vi ? "Tổng Tiền" : "Order Total"}
+                      <div className="border-l tv-border pl-4">
+                        <p className="text-[11px] tv-text-muted whitespace-nowrap">
+                          {vi ? "Doanh Thu Đơn" : "Order Revenue"}
                         </p>
-                        <p className="font-mono text-base font-bold text-emerald-400">
+                        <p className="font-mono text-sm font-black text-emerald-400 whitespace-nowrap">
                           {formatVnd(order.totalPrice)}
                         </p>
-                        <p className="text-[11px] tv-text-muted">
+                        <p className="text-[10px] tv-text-muted whitespace-nowrap">
                           {formatVnd(order.unitPrice)}/{vi ? "cái" : "pc"} •{" "}
-                          {vi ? "Giao" : "Due"} {order.dueDate}
+                          {order.dueDate}
                         </p>
                       </div>
                     ) : (
-                      <div className="text-right">
-                        <p className="text-xs tv-text-muted">
+                      <div className="border-l tv-border pl-4">
+                        <p className="text-[11px] tv-text-muted whitespace-nowrap">
                           {vi ? "Hạn Giao & QC" : "Due & QC"}
                         </p>
-                        <p className="font-mono text-xs font-bold tv-accent-text">
+                        <p className="font-mono text-xs font-bold tv-accent-text whitespace-nowrap">
                           {order.dueDate}
                         </p>
-                        <p className="text-[10px] tv-text-muted">
-                          🔒 {vi ? "Chế độ kỹ thuật xưởng" : "Shop Floor Mode"}
+                        <p className="text-[10px] tv-text-muted whitespace-nowrap">
+                          🔒 {vi ? "Chế độ xưởng" : "Floor Mode"}
                         </p>
                       </div>
                     )}
+                  </div>
+                </div>
 
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        onClick={() => onOpenJobTicket(order)}
-                        className="tv-surface-2 tv-border rounded-lg border px-3 py-1.5 text-xs font-semibold hover:opacity-85 cursor-pointer"
-                      >
-                        🖨{" "}
+                {/* Bottom Bar: Material Norms (Left) + Action Buttons (Right) */}
+                <div className="tv-surface-2 tv-border flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-[11px]">
+                  {canViewFinancials ? (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span>
+                        🧵{" "}
+                        <strong className="tv-text">
+                          {vi ? "Định mức chỉ trên:" : "Upper thread:"}
+                        </strong>{" "}
+                        {order.colorCount} {vi ? "màu" : "colors"} →{" "}
+                        {vi ? "Mua" : "Buy"}{" "}
+                        <strong className="tv-accent-text">
+                          {mat.totalMasterConesToBuy}{" "}
+                          {vi ? "cuộn" : "cones"}
+                        </strong>
+                        {mat.splitThreadFor20Heads
+                          ? ` (${vi ? "sang" : "→"} ${mat.totalSubConesFor20Heads} ${vi ? "cuộn con" : "sub"})`
+                          : ""}{" "}
+                        ={" "}
+                        <span className="font-mono font-bold text-amber-400">
+                          {formatVnd(mat.upperThreadCost)}
+                        </span>
+                      </span>
+
+                      {mat.evaFoamCost > 0 && (
+                        <span>
+                          • 🧊{" "}
+                          <strong className="tv-text">
+                            {vi ? "Mút EVA 3D:" : "3D EVA:"}
+                          </strong>{" "}
+                          <span className="font-mono font-bold text-amber-400">
+                            {formatVnd(mat.evaFoamCost)}
+                          </span>
+                        </span>
+                      )}
+
+                      <span>
+                        • 🚚{" "}
+                        <strong className="tv-text">
+                          {mat.shippingMode === "CHANH_XE_PICKUP"
+                            ? vi
+                              ? "Chành xe 1 chiều:"
+                              : "1-way Chanh Xe:"
+                            : vi
+                              ? "Xe vận chuyển 2 chiều:"
+                              : "2-way vehicle:"}
+                        </strong>{" "}
+                        <span className="font-mono font-bold text-sky-400">
+                          {formatVnd(mat.shippingCost)}
+                        </span>
+                      </span>
+
+                      <span className="font-mono font-bold text-emerald-400">
+                        • {vi ? "Còn lại:" : "Net:"}{" "}
+                        {formatVnd(mat.orderGrossProfit)}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="tv-text-muted">
+                      {vi
+                        ? "Phiếu lệnh sản xuất & mẫu duyệt kỹ thuật chuyền thêu"
+                        : "Production work order & shop-floor technical sheet"}
+                    </span>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2 ml-auto">
+                    <button
+                      onClick={() => onOpenJobTicket(order)}
+                      className="tv-surface tv-border inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold tv-text hover:opacity-90 cursor-pointer"
+                    >
+                      <span aria-hidden="true">📄</span>
+                      <span>
                         {canViewFinancials
                           ? vi
-                            ? "Phiếu SX / Duyệt Mẫu / VietQR"
-                            : "Job Sheet / Proof / VietQR"
+                            ? "Lệnh SX & Phiếu Tính Tiền"
+                            : "Job Ticket & Statement"
                           : vi
-                            ? "Phiếu SX & Duyệt Mẫu"
-                            : "Job Sheet & Proof"}
+                            ? "Lệnh SX & Mẫu Duyệt"
+                            : "Job Ticket & Proof"}
+                      </span>
+                    </button>
+                    {onAdjustDefectCount && (
+                      <button
+                        onClick={() => onAdjustDefectCount(order, 1)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/45 bg-rose-500/15 px-3 py-1.5 text-xs font-bold text-rose-400 hover:bg-rose-500/25 cursor-pointer"
+                        title={
+                          vi
+                            ? "Ghi nhận +1 sản phẩm không đạt tiêu chuẩn QC (phế phẩm / lỗi thêu)"
+                            : "Record +1 non-conforming garment during QC inspection"
+                        }
+                      >
+                        <span aria-hidden="true">⚠</span>
+                        <span>
+                          {vi ? "+1 Phế Phẩm QC" : "+1 QC Defect"}
+                        </span>
                       </button>
-                      {onAdjustDefectCount && (
-                        <button
-                          onClick={() => onAdjustDefectCount(order, 1)}
-                          className="rounded-lg border border-rose-500/35 bg-rose-500/10 px-2.5 py-1.5 text-xs font-semibold text-rose-400 hover:bg-rose-500/20 cursor-pointer"
-                          title={
-                            vi
-                              ? "Ghi nhận +1 sản phẩm lỗi thêu / đứt chỉ"
-                              : "Log +1 defective/spoiled garment"
-                          }
-                        >
-                          +1 {vi ? "Lỗi" : "Defect"}
-                        </button>
-                      )}
-                      {canViewFinancials && (
-                        <button
-                          onClick={() => onEditOrder(order)}
-                          className="tv-surface-2 tv-border rounded-lg border px-3 py-1.5 text-xs font-semibold hover:opacity-85 cursor-pointer"
-                        >
-                          {vi ? "Sửa" : "Edit"}
-                        </button>
-                      )}
-                      {order.status !== "DELIVERED" && (
-                        <button
-                          onClick={() => onAdvanceOrderStatus(order)}
-                          className="tv-accent-bg rounded-lg px-3 py-1.5 text-xs font-bold cursor-pointer"
-                        >
-                          {vi ? "Chuyển Bước →" : "Advance →"}
-                        </button>
-                      )}
-                      {canViewFinancials && (
-                        <button
-                          onClick={() =>
-                            onDeleteOrder(order.id, order.orderNumber)
-                          }
-                          className="tv-surface-2 tv-border rounded-lg border px-2.5 py-1.5 text-xs tv-text-muted hover:text-rose-400 cursor-pointer"
-                        >
-                          {vi ? "Xóa" : "Delete"}
-                        </button>
-                      )}
-                    </div>
+                    )}
+                    {canViewFinancials && (
+                      <button
+                        onClick={() => onEditOrder(order)}
+                        className="tv-surface tv-border inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold tv-text hover:opacity-90 cursor-pointer"
+                      >
+                        <span aria-hidden="true">✎</span>
+                        <span>{vi ? "Sửa" : "Edit"}</span>
+                      </button>
+                    )}
+                    {nextStage && (
+                      <button
+                        onClick={() => onAdvanceOrderStatus(order)}
+                        title={
+                          vi
+                            ? `Chuyển lệnh sản xuất sang công đoạn: ${statusLabels[nextStage]}`
+                            : `Advance work order to stage: ${statusLabels[nextStage]}`
+                        }
+                        className="tv-accent-bg inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold cursor-pointer"
+                      >
+                        {vi
+                          ? `Chuyển: ${statusLabels[nextStage]} →`
+                          : `Advance: ${statusLabels[nextStage]} →`}
+                      </button>
+                    )}
+                    {canViewFinancials && (
+                      <button
+                        onClick={() =>
+                          onDeleteOrder(order.id, order.orderNumber)
+                        }
+                        className="tv-surface tv-border inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-xs font-semibold text-rose-400 hover:bg-rose-500/15 cursor-pointer"
+                      >
+                        {vi ? "Xóa" : "Delete"}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -449,4 +562,3 @@ function WorkOrdersTab({
 }
 
 export default React.memo(WorkOrdersTab);
-

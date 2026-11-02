@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   EmbroideryDesign,
   EmbroideryMachine,
@@ -8,7 +8,9 @@ import type {
 } from "@/lib/types";
 import { PLACEMENT_TEXT, type StudioLocale } from "@/lib/i18n";
 import { formatVnd } from "@/lib/currency";
+import { calculateOrderMaterialAndProfit } from "@/lib/seed-data";
 import DesignHoopPreview from "./DesignHoopPreview";
+import ModernSelect from "./ModernSelect";
 
 interface JobTicketModalProps {
   order: EmbroideryOrder;
@@ -119,6 +121,11 @@ export default function JobTicketModal({
       ? order.threadMetersUsed
       : Math.round(order.quantity * (order.stitchCount / 1000) * 5.2);
 
+  const matNorm = useMemo(
+    () => calculateOrderMaterialAndProfit(order),
+    [order],
+  );
+
   const transferMemo = `TT DON ${order.orderNumber}`;
   const vietQrUrl = `https://img.vietqr.io/image/${bankId}-${accountNo}-compact2.png?amount=${balanceDue > 0 ? balanceDue : grandTotalWithVat}&addInfo=${encodeURIComponent(transferMemo)}&accountName=${encodeURIComponent(accountName)}`;
 
@@ -130,45 +137,63 @@ export default function JobTicketModal({
     [order.orderNumber, bankId, accountNo, balanceDue],
   );
 
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs overflow-y-auto">
-      <div className="tv-surface tv-border tv-text my-8 w-full max-w-4xl rounded-2xl border p-6 shadow-2xl">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs overflow-y-auto"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="tv-surface tv-border tv-text my-8 w-full max-w-4xl rounded-2xl border p-6 shadow-2xl"
+      >
         {/* Top Action Bar */}
         <div className="tv-border flex flex-wrap items-center justify-between gap-3 border-b pb-4 print:hidden">
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={() => setMode("ticket")}
-              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+              className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-bold transition cursor-pointer ${
                 mode === "ticket"
-                  ? "tv-accent-bg"
-                  : "tv-surface-2 tv-text-muted hover:opacity-90"
+                  ? "tv-accent-bg border-transparent"
+                  : "tv-surface-2 tv-border tv-text-muted hover:opacity-90"
               }`}
             >
-              ⚙ {vi ? "1. Phiếu Lệnh SX (Xưởng)" : "1. Shop Job Ticket"}
+              <span aria-hidden="true">⚙</span>
+              <span>{vi ? "1. Phiếu Lệnh SX (Xưởng)" : "1. Shop Job Ticket"}</span>
             </button>
             <button
               onClick={() => setMode("proof")}
-              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+              className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-bold transition cursor-pointer ${
                 mode === "proof"
-                  ? "tv-accent-bg"
-                  : "tv-surface-2 tv-text-muted hover:opacity-90"
+                  ? "tv-accent-bg border-transparent"
+                  : "tv-surface-2 tv-border tv-text-muted hover:opacity-90"
               }`}
             >
-              ◎ {vi ? "2. Phiếu Duyệt Mẫu (Zalo)" : "2. Client Sample Proof"}
+              <span aria-hidden="true">◎</span>
+              <span>{vi ? "2. Phiếu Duyệt Mẫu (Zalo)" : "2. Client Sample Proof"}</span>
             </button>
             {canViewFinancials && (
               <button
                 onClick={() => setMode("invoice")}
-                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+                className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-bold transition cursor-pointer ${
                   mode === "invoice"
-                    ? "tv-accent-bg"
-                    : "tv-surface-2 tv-text-muted hover:opacity-90"
+                    ? "tv-accent-bg border-transparent"
+                    : "tv-surface-2 tv-border tv-text-muted hover:opacity-90"
                 }`}
               >
-                ₫{" "}
-                {vi
-                  ? "3. Hóa Đơn VAT & VietQR"
-                  : "3. VAT Invoice & VietQR"}
+                <span aria-hidden="true">₫</span>
+                <span>
+                  {vi
+                    ? "3. Hóa Đơn VAT & VietQR"
+                    : "3. VAT Invoice & VietQR"}
+                </span>
               </button>
             )}
           </div>
@@ -184,7 +209,7 @@ export default function JobTicketModal({
                       Math.round(order.totalPrice * 0.5),
                     )
                   }
-                  className="rounded-lg bg-amber-500/20 border border-amber-500/40 px-3 py-1.5 text-xs font-bold text-amber-300 hover:bg-amber-500/30 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 px-3.5 py-2 text-xs font-bold text-amber-300 hover:bg-amber-500/30 cursor-pointer"
                 >
                   {vi
                     ? `Thu Cọc 50% (${formatVnd(Math.round(order.totalPrice * 0.5))})`
@@ -194,25 +219,29 @@ export default function JobTicketModal({
             {canViewFinancials && balanceDue > 0 && (
               <button
                 onClick={() => onRecordPayment(order.id, grandTotalWithVat)}
-                className="rounded-lg bg-emerald-500/20 border border-emerald-500/40 px-3 py-1.5 text-xs font-bold text-emerald-400 hover:bg-emerald-500/30 cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40 px-3.5 py-2 text-xs font-bold text-emerald-400 hover:bg-emerald-500/30 cursor-pointer"
               >
-                ✓{" "}
-                {vi
-                  ? `Xác Nhận Thu Đủ (${formatVnd(grandTotalWithVat)})`
-                  : `Mark Paid in Full (${formatVnd(grandTotalWithVat)})`}
+                <span aria-hidden="true">✓</span>
+                <span>
+                  {vi
+                    ? `Xác Nhận Thu Đủ (${formatVnd(grandTotalWithVat)})`
+                    : `Mark Paid in Full (${formatVnd(grandTotalWithVat)})`}
+                </span>
               </button>
             )}
             <button
               onClick={() => window.print()}
-              className="tv-accent-bg rounded-lg px-3.5 py-1.5 text-xs font-bold cursor-pointer"
+              className="tv-accent-bg inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-bold cursor-pointer"
             >
-              🖨 {vi ? "In Phiếu / Xuất PDF" : "Print / Save PDF"}
+              <span aria-hidden="true">🖨</span>
+              <span>{vi ? "In Phiếu / Xuất PDF" : "Print / Save PDF"}</span>
             </button>
             <button
               onClick={onClose}
-              className="tv-input px-3 py-1.5 text-xs tv-text-muted cursor-pointer"
+              className="tv-input inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold tv-text-muted cursor-pointer"
             >
-              ✕ {vi ? "Đóng" : "Close"}
+              <span aria-hidden="true">✕</span>
+              <span>{vi ? "Đóng" : "Close"}</span>
             </button>
           </div>
         </div>
@@ -372,10 +401,19 @@ export default function JobTicketModal({
                 <div className="tv-surface-2 tv-border rounded-xl border p-3 flex items-center justify-between">
                   <div>
                     <p className="tv-text-muted text-[11px]">
-                      {vi ? "Ước tính tiêu hao chỉ:" : "Est. Thread Used:"}
+                      {vi
+                        ? "Định mức chỉ trên:"
+                        : "Upper Thread Norm:"}
                     </p>
                     <p className="font-mono text-sm font-bold tv-accent-text">
-                      ~{estimatedThreadMeters.toLocaleString()}m
+                      {matNorm.totalMasterConesToBuy} {vi ? "cuộn" : "cones"}
+                      {matNorm.splitThreadFor20Heads
+                        ? ` → ${matNorm.totalSubConesFor20Heads} ${vi ? "c/20 đầu" : "sub-cones"}`
+                        : ` (${order.colorCount} ${vi ? "màu" : "colors"})`}
+                    </p>
+                    <p className="font-mono text-[10px] tv-text-muted">
+                      ~{estimatedThreadMeters.toLocaleString()}m{" "}
+                      {matNorm.is3dPuff ? "• +Mút EVA 3D" : ""}
                     </p>
                   </div>
                   <div className="text-right">
@@ -760,20 +798,20 @@ export default function JobTicketModal({
                       VAT {rate}%
                     </button>
                   ))}
-                  <select
+                  <ModernSelect
                     value={bankId}
                     onChange={(e) => {
                       setBankId(e.target.value);
                       setQrImgFailed(false);
                     }}
-                    className="tv-input px-2 py-1 text-xs font-semibold"
+                    className="px-2.5 py-1 text-xs font-semibold"
                   >
                     <option value="VCB">Vietcombank</option>
                     <option value="MB">MBBank</option>
                     <option value="ACB">ACB</option>
                     <option value="TCB">Techcombank</option>
                     <option value="BIDV">BIDV</option>
-                  </select>
+                  </ModernSelect>
                 </div>
               </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useState } from "react";
+import { memo, useState } from "react";
 import type { Customer } from "@/lib/types";
 import { formatVnd } from "@/lib/currency";
 import PaginationBar from "../PaginationBar";
@@ -93,15 +93,15 @@ const CustomersTab = memo(function CustomersTab({
               className="tv-card p-5 space-y-3 flex flex-col justify-between"
             >
               <div className="space-y-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-base font-bold">{cust.company}</h3>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-base font-bold truncate">{cust.company}</h3>
                     <p className="text-xs tv-text-muted">
                       {vi ? "Liên hệ:" : "Contact:"} {cust.name} • {cust.email}{" "}
                       • {cust.phone}
                     </p>
                   </div>
-                  <div className="text-right font-mono">
+                  <div className="shrink-0 text-right font-mono">
                     <p className="text-sm font-bold text-emerald-400">
                       {formatVnd(cust.totalSpend)}
                     </p>

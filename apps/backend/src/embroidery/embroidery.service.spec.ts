@@ -16,13 +16,13 @@ describe('EmbroideryService', () => {
   it('returns seeded dashboard metrics and collections in VND', () => {
     const dashboard = service.getDashboard();
     expect(dashboard.orders.length).toBeGreaterThanOrEqual(5);
-    expect(dashboard.machines.length).toBe(4);
+    expect(dashboard.machines.length).toBe(5);
     expect(dashboard.designs.length).toBe(5);
     expect(dashboard.inventory.length).toBeGreaterThanOrEqual(9);
-    expect(dashboard.metrics.runningMachinesCount).toBe(2);
+    expect(dashboard.metrics.runningMachinesCount).toBe(3);
     expect(dashboard.metrics.monthlyRevenue).toBeGreaterThan(50000000);
     expect(dashboard.metrics.collectedRevenue).toBeGreaterThan(20000000);
-    expect(dashboard.metrics.inventoryValue).toBeGreaterThan(5000000);
+    expect(dashboard.metrics.inventoryValue).toBeGreaterThan(4000000);
   });
 
   it('calculates embroidery quote pricing accurately in VND', () => {
@@ -37,7 +37,8 @@ describe('EmbroideryService', () => {
       rushOrder: true,
     });
 
-    expect(quote.digitizingFee).toBe(350000);
+    expect(quote.digitizingFee).toBe(0);
+    expect(quote.totalMasterConesToBuy).toBe(20);
     expect(quote.garmentPricePerPiece).toBe(150000);
     expect(quote.rushFee).toBeGreaterThan(0);
     expect(quote.totalPrice).toBeGreaterThan(quote.subtotal);

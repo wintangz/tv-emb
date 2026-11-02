@@ -77,21 +77,21 @@ export const ORDER_STATUS_TEXT: Record<
   Record<OrderStatus, string>
 > = {
   vi: {
-    QUOTE: "Báo Giá",
-    DIGITIZING: "Thiết Kế Mẫu",
-    APPROVAL_PENDING: "Chờ Duyệt Mẫu",
-    IN_PRODUCTION: "Đang Chạy Máy",
-    QUALITY_CHECK: "Cắt Chỉ & QC",
-    COMPLETED: "Chờ Giao Hàng",
-    DELIVERED: "Đã Giao",
+    QUOTE: "Báo Giá & Nhận Mẫu",
+    DIGITIZING: "Thiết Kế Mẫu .DST & Thêu Mẫu Thử (0₫)",
+    APPROVAL_PENDING: "Duyệt Mẫu • Đặt Chỉ & Chờ Hàng Cắt",
+    IN_PRODUCTION: "Đang Lên Hàng & Chạy Máy",
+    QUALITY_CHECK: "Kiểm Hàng (QC) & Cắt Chỉ",
+    COMPLETED: "Hoàn Thành • Chờ Điều Phối Xe Giao",
+    DELIVERED: "Đã Giao Hàng",
   },
   en: {
-    QUOTE: "Quote",
-    DIGITIZING: "Digitizing",
-    APPROVAL_PENDING: "Sample Approval",
-    IN_PRODUCTION: "On Machine",
-    QUALITY_CHECK: "Trim & QC",
-    COMPLETED: "Ready for Pickup",
+    QUOTE: "Quote & Intake",
+    DIGITIZING: "Digitizing .DST & Free Sample",
+    APPROVAL_PENDING: "Approved • Order Thread & Await Cut Panels",
+    IN_PRODUCTION: "Running on 20-Head Tajima",
+    QUALITY_CHECK: "QC Inspection & Trimming",
+    COMPLETED: "Completed • Ready for Dispatch",
     DELIVERED: "Delivered",
   },
 };
@@ -163,18 +163,20 @@ export const EMPLOYEE_ROLE_TEXT: Record<
   Record<EmployeeRole, string>
 > = {
   vi: {
-    "Machine Operator": "Thợ Vận Hành Máy Thêu",
-    Digitizer: "Kỹ Thuật Thiết Kế Mẫu (Digitizer)",
-    "Trimming & QC": "Cắt Chỉ, Ủi & Kiểm Hàng QC",
-    "Shop Supervisor": "Quản Đốc Xưởng",
-    "Sales & Coordinator": "Điều Đơn & Kinh Doanh",
+    "Machine Operator": "Thợ Đứng Máy (Lương CB 9tr/tháng)",
+    "Trimming & QC": "Kiểm Hàng QC (Lương CB 8–8.5tr/tháng)",
+    "Errands & Delivery": "Nhân Viên Giao Nhận & Hỗ Trợ Xưởng",
+    Digitizer: "Kỹ Thuật Viên Thiết Kế Mẫu (.DST)",
+    "Shop Supervisor": "Tổ Trưởng Điều Độ Sản Xuất",
+    "Sales & Coordinator": "Quản Lý Đơn Hàng & Định Mức Vật Tư",
   },
   en: {
-    "Machine Operator": "Machine Operator",
-    Digitizer: "Digitizer",
-    "Trimming & QC": "Trimming & QC",
-    "Shop Supervisor": "Shop Supervisor",
-    "Sales & Coordinator": "Sales & Coordinator",
+    "Machine Operator": "Machine Operator (9M VND/mo base)",
+    "Trimming & QC": "Quality Control / QC (8–8.5M VND/mo base)",
+    "Errands & Delivery": "Logistics & Workshop Support",
+    Digitizer: ".DST Embroidery Digitizer",
+    "Shop Supervisor": "Production Floor Supervisor",
+    "Sales & Coordinator": "Order & Material Norm Coordinator",
   },
 };
 
@@ -183,14 +185,14 @@ export const EMPLOYEE_SHIFT_TEXT: Record<
   Record<EmployeeShift, string>
 > = {
   vi: {
-    Morning: "Ca Sáng (06:00–14:00)",
-    Afternoon: "Ca Chiều (14:00–22:00)",
-    "Full-Day": "Hành Chính (08:00–17:30)",
+    Morning: "Ca Ngày 10.5h (07:00–18:30, nghỉ trưa 1h)",
+    Afternoon: "Ca Ngày 10.5h (07:00–18:30, nghỉ trưa 1h)",
+    "Full-Day": "Ca Ngày 10.5h (07:00–18:30, nghỉ trưa 1h)",
   },
   en: {
-    Morning: "Morning Shift",
-    Afternoon: "Afternoon Shift",
-    "Full-Day": "Full-Day Shift",
+    Morning: "10.5h Day Shift (07:00–18:30, 1h lunch)",
+    Afternoon: "10.5h Day Shift (07:00–18:30, 1h lunch)",
+    "Full-Day": "10.5h Day Shift (07:00–18:30, 1h lunch)",
   },
 };
 
@@ -215,14 +217,14 @@ export const SALARY_STATUS_TEXT: Record<
   Record<SalaryPaymentStatus, string>
 > = {
   vi: {
-    UNPAID: "Chưa Chi Lương",
-    PARTIAL_ADVANCE: "Đã Ứng Lương",
+    UNPAID: "Chưa Quyết Toán",
+    PARTIAL_ADVANCE: "Đã Tạm Ứng",
     PAID: "Đã Tất Toán",
   },
   en: {
-    UNPAID: "Unpaid",
-    PARTIAL_ADVANCE: "Advance Paid",
-    PAID: "Paid in Full",
+    UNPAID: "Accrued / Unpaid",
+    PARTIAL_ADVANCE: "Partial Advance",
+    PAID: "Settled in Full",
   },
 };
 
